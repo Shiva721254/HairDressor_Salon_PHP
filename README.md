@@ -82,33 +82,57 @@ Password: secret123
 
 📁 Project Structure
 app/
+
 ├── public/
+
 │   ├── index.php        # Front controller
+
 │   └── assets/
+
 │       └── js/
+
 │           └── app.js
 │
+
 ├── src/
+
 │   ├── Controllers/
+
 │   ├── Core/
+
 │   ├── Repositories/
+
 │   ├── Services/
 │
+
 ├── views/
+
 │   ├── layouts/
+
 │   │   └── main.php
+
 │   ├── home.php
+
 │   ├── contact.php
+
 │   └── hello.php
+
 │
 ├── database/
+
 │   └── init/
+
 │       ├── 001_schema.sql
+
 │       └── 002_seed.sql
+
 │
 docker-compose.yml
+
 nginx.conf
+
 PHP.Dockerfile
+
 README.md
 
 🔐 Security Considerations
@@ -170,10 +194,15 @@ Bootstrap 5 (UI framework)
 🚧 Current Status
 
 ✅ Docker setup complete
+
 ✅ MVC foundation implemented
+
 ✅ Routing and layout rendering complete
+
 🚧 Database layer (PDO + repositories) – next step
+
 🚧 Authentication
+
 🚧 Appointment booking system
 
 👤 Author
