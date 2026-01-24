@@ -1,7 +1,9 @@
 <?php
+
 declare(strict_types=1);
 
 namespace App\Controllers;
+
 use App\Core\Controller;
 
 use App\Repositories\AppointmentRepository;
@@ -10,50 +12,61 @@ use App\Repositories\ServiceRepository;
 
 final class AppointmentController extends Controller
 {
-public function index(): string
-{
-    $repo = new AppointmentRepository();
-    $appointments = $repo->allWithDetails();
 
-    $success = $this->flash('success');
-    $error = $this->flash('error');
+    public function index(): string
+    {
+        // 1️⃣ Read filter from URL, default to 'upcoming'
+        $filter = $_GET['filter'] ?? 'upcoming';
 
-    return $this->render('appointments/index', [
-        'title' => 'Appointments',
-        'appointments' => $appointments,
-        'success' => $success,
-        'error' => $error,
-    ]);
-}   
+        // 2️⃣ Load appointments using the filter
+        $repo = new AppointmentRepository();
+        $appointments = $repo->allWithDetails(
+            is_string($filter) ? $filter : 'upcoming'
+        );
 
-public function show(string $id): string
-{
-    $id = (int) $id;
+        // 3️⃣ Flash messages
+        $success = $this->flash('success');
+        $error = $this->flash('error');
 
-    if ($id <= 0) {
-        http_response_code(404);
-        return $this->render('errors/404', [
-            'title' => 'Invalid appointment'
+        // 4️⃣ Render view and pass filter to it
+        return $this->render('appointments/index', [
+            'title' => 'Appointments',
+            'appointments' => $appointments,
+            'filter' => is_string($filter) ? strtolower($filter) : 'upcoming',
+            'success' => $success,
+            'error' => $error,
         ]);
     }
 
-    $repo = new AppointmentRepository();
-    $appointment = $repo->findWithDetails($id);
 
-    if ($appointment === null) {
-        http_response_code(404);
-        return $this->render('errors/404', [
-            'title' => 'Appointment not found'
+    public function show(string $id): string
+    {
+        $id = (int) $id;
+
+        if ($id <= 0) {
+            http_response_code(404);
+            return $this->render('errors/404', [
+                'title' => 'Invalid appointment'
+            ]);
+        }
+
+        $repo = new AppointmentRepository();
+        $appointment = $repo->findWithDetails($id);
+
+        if ($appointment === null) {
+            http_response_code(404);
+            return $this->render('errors/404', [
+                'title' => 'Appointment not found'
+            ]);
+        }
+
+        return $this->render('appointments/show', [
+            'title' => 'Appointment Details',
+            'appointment' => $appointment
         ]);
     }
 
-    return $this->render('appointments/show', [
-        'title' => 'Appointment Details',
-        'appointment' => $appointment
-    ]);
-}
-
-public function create(): void
+    public function create(): void
     {
         $hairRepo = new HairdresserRepository();
         $serviceRepo = new ServiceRepository();
@@ -124,178 +137,21 @@ public function create(): void
 
 
     private function overlapsExisting(int $hairdresserId, int $serviceId, string $dateYmd, string $timeHi): bool
-{
-    $serviceRepo = new \App\Repositories\ServiceRepository();
-    $apptRepo = new \App\Repositories\AppointmentRepository();
+    {
+        $serviceRepo = new \App\Repositories\ServiceRepository();
+        $apptRepo = new \App\Repositories\AppointmentRepository();
 
-    $service = $serviceRepo->findById($serviceId);
-    if ($service === null) return true;
+        $service = $serviceRepo->findById($serviceId);
+        if ($service === null) return true;
 
-    $duration = max(1, (int)$service['duration_minutes']);
+        $duration = max(1, (int)$service['duration_minutes']);
 
-    $start = \DateTimeImmutable::createFromFormat('Y-m-d H:i', $dateYmd . ' ' . $timeHi);
-    if ($start === false) return true;
-    $end = $start->modify("+{$duration} minutes");
+        $start = \DateTimeImmutable::createFromFormat('Y-m-d H:i', $dateYmd . ' ' . $timeHi);
+        if ($start === false) return true;
+        $end = $start->modify("+{$duration} minutes");
 
-    $bookings = $apptRepo->bookingsForDate($hairdresserId, $dateYmd);
+        $bookings = $apptRepo->bookingsForDate($hairdresserId, $dateYmd);
 
-    foreach ($bookings as $b) {
-        $bStart = \DateTimeImmutable::createFromFormat('Y-m-d H:i', $dateYmd . ' ' . $b['start_time']);
-        if ($bStart === false) continue;
-
-        $bDur = max(1, (int)$b['duration_minutes']);
-        $bEnd = $bStart->modify("+{$bDur} minutes");
-
-        if ($start < $bEnd && $end > $bStart) return true;
-    }
-
-    return false;
-}
-
-public function confirm(): void
-{
-    $hairdresserId = (int)($_POST['hairdresser_id'] ?? 0);
-    $serviceId     = (int)($_POST['service_id'] ?? 0);
-    $dateYmd       = trim((string)($_POST['appointment_date'] ?? ''));
-    $timeHi        = trim((string)($_POST['appointment_time'] ?? ''));
-
-    $errors = [];
-
-    if ($hairdresserId <= 0) $errors[] = 'Select a hairdresser.';
-    if ($serviceId <= 0) $errors[] = 'Select a service.';
-
-    $dt = \DateTimeImmutable::createFromFormat('Y-m-d', $dateYmd);
-    if ($dt === false || $dt->format('Y-m-d') !== $dateYmd) $errors[] = 'Invalid appointment date.';
-
-    $tm = \DateTimeImmutable::createFromFormat('H:i', $timeHi);
-    if ($tm === false || $tm->format('H:i') !== $timeHi) $errors[] = 'Invalid appointment time.';
-
-    // If validation fails, re-render create page with data
-    if ($errors) {
-        $hairRepo = new HairdresserRepository();
-        $serviceRepo = new ServiceRepository();
-        $hairdressers = $hairRepo->all();
-        $services = $serviceRepo->all();
-        require __DIR__ . '/../../views/appointments/create.php';
-        return;
-    }
-
-    // Load selected entities for display
-    $hairRepo = new HairdresserRepository();
-    $serviceRepo = new ServiceRepository();
-
-    $hairdresser = $hairRepo->findById($hairdresserId);
-    $service     = $serviceRepo->findById($serviceId);
-
-    if ($hairdresser === null) $errors[] = 'Selected hairdresser not found.';
-    if ($service === null) $errors[] = 'Selected service not found.';
-
-    if ($errors) {
-        $hairdressers = $hairRepo->all();
-        $services = $serviceRepo->all();
-        require __DIR__ . '/../../views/appointments/create.php';
-        return;
-    }
-
-    // Show confirmation page (no DB write yet)
-    require __DIR__ . '/../../views/appointments/confirm.php';
-}
-
-
-public function finalize(): void
-{
-    $hairdresserId = (int)$_POST['hairdresser_id'];
-    $serviceId     = (int)$_POST['service_id'];
-    $dateYmd       = $_POST['appointment_date'];
-    $timeHi        = $_POST['appointment_time'];
-
-    $userId = 1; // until auth
-
-    $repo = new AppointmentRepository();
-
-    // Safety check (race condition protection)
-    if ($this->overlapsExisting($hairdresserId, $serviceId, $dateYmd, $timeHi)) {
-        http_response_code(409);
-        echo 'Slot no longer available.';
-        return;
-    }
-
-    $repo->create(
-        $hairdresserId,
-        $serviceId,
-        $userId,
-        $dateYmd,
-        $timeHi,
-        'booked'
-    );
-
-    header('Location: /appointments');
-    exit;
-}
-
-
-public function slots(): void
-{
-    $hairdresserId = (int)($_GET['hairdresser_id'] ?? 0);
-    $serviceId     = (int)($_GET['service_id'] ?? 0);
-    $dateYmd       = trim((string)($_GET['date'] ?? ''));
-
-    $errors = [];
-    if ($hairdresserId <= 0) $errors[] = 'hairdresser_id required';
-    if ($serviceId <= 0) $errors[] = 'service_id required';
-
-    $dt = \DateTimeImmutable::createFromFormat('Y-m-d', $dateYmd);
-    if ($dt === false || $dt->format('Y-m-d') !== $dateYmd) $errors[] = 'valid date required (Y-m-d)';
-
-    if ($errors) {
-        http_response_code(422);
-        header('Content-Type: application/json');
-        echo json_encode(['ok' => false, 'errors' => $errors]);
-        return;
-    }
-
-    $dayOfWeek = (int)$dt->format('N'); // 1..7
-
-    $availRepo = new \App\Repositories\AvailabilityRepository();
-    $serviceRepo = new \App\Repositories\ServiceRepository();
-    $apptRepo = new \App\Repositories\AppointmentRepository();
-
-    $window = $availRepo->findWindowFor($hairdresserId, $dayOfWeek);
-    $service = $serviceRepo->findById($serviceId);
-
-    if ($window === null || $service === null) {
-        header('Content-Type: application/json');
-        echo json_encode(['ok' => true, 'slots' => []]);
-        return;
-    }
-
-    $duration = (int)$service['duration_minutes'];
-    if ($duration <= 0) $duration = 30;
-
-    // 15-minute increments (typical booking UX)
-    $stepMinutes = 15;
-
-    $start = \DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $dateYmd . ' ' . $window['start_time']);
-    $end   = \DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $dateYmd . ' ' . $window['end_time']);
-
-    if ($start === false || $end === false || $end <= $start) {
-        header('Content-Type: application/json');
-        echo json_encode(['ok' => true, 'slots' => []]);
-        return;
-    }
-
-    // Existing bookings with their durations
-    $bookings = $apptRepo->bookingsForDate($hairdresserId, $dateYmd);
-
-    $slots = [];
-    $cursor = $start;
-    $latestStart = $end->modify("-{$duration} minutes");
-
-    while ($cursor <= $latestStart) {
-        $candidateStart = $cursor;
-        $candidateEnd = $candidateStart->modify("+{$duration} minutes");
-
-        $overlaps = false;
         foreach ($bookings as $b) {
             $bStart = \DateTimeImmutable::createFromFormat('Y-m-d H:i', $dateYmd . ' ' . $b['start_time']);
             if ($bStart === false) continue;
@@ -303,26 +159,183 @@ public function slots(): void
             $bDur = max(1, (int)$b['duration_minutes']);
             $bEnd = $bStart->modify("+{$bDur} minutes");
 
-            // overlap if candidateStart < bEnd AND candidateEnd > bStart
-            if ($candidateStart < $bEnd && $candidateEnd > $bStart) {
-                $overlaps = true;
-                break;
-            }
+            if ($start < $bEnd && $end > $bStart) return true;
         }
 
-        if (!$overlaps) {
-            $slots[] = $candidateStart->format('H:i');
-        }
-
-        $cursor = $cursor->modify("+{$stepMinutes} minutes");
+        return false;
     }
 
-    header('Content-Type: application/json');
-    echo json_encode(['ok' => true, 'slots' => $slots]);
-}
+    public function confirm(): void
+    {
+        $hairdresserId = (int)($_POST['hairdresser_id'] ?? 0);
+        $serviceId     = (int)($_POST['service_id'] ?? 0);
+        $dateYmd       = trim((string)($_POST['appointment_date'] ?? ''));
+        $timeHi        = trim((string)($_POST['appointment_time'] ?? ''));
+
+        $errors = [];
+
+        if ($hairdresserId <= 0) $errors[] = 'Select a hairdresser.';
+        if ($serviceId <= 0) $errors[] = 'Select a service.';
+
+        $dt = \DateTimeImmutable::createFromFormat('Y-m-d', $dateYmd);
+        if ($dt === false || $dt->format('Y-m-d') !== $dateYmd) $errors[] = 'Invalid appointment date.';
+
+        $tm = \DateTimeImmutable::createFromFormat('H:i', $timeHi);
+        if ($tm === false || $tm->format('H:i') !== $timeHi) $errors[] = 'Invalid appointment time.';
+
+        // If validation fails, re-render create page with data
+        if ($errors) {
+            $hairRepo = new HairdresserRepository();
+            $serviceRepo = new ServiceRepository();
+            $hairdressers = $hairRepo->all();
+            $services = $serviceRepo->all();
+            require __DIR__ . '/../../views/appointments/create.php';
+            return;
+        }
+
+        // Load selected entities for display
+        $hairRepo = new HairdresserRepository();
+        $serviceRepo = new ServiceRepository();
+
+        $hairdresser = $hairRepo->findById($hairdresserId);
+        $service     = $serviceRepo->findById($serviceId);
+
+        if ($hairdresser === null) $errors[] = 'Selected hairdresser not found.';
+        if ($service === null) $errors[] = 'Selected service not found.';
+
+        if ($errors) {
+            $hairdressers = $hairRepo->all();
+            $services = $serviceRepo->all();
+            require __DIR__ . '/../../views/appointments/create.php';
+            return;
+        }
+
+        // Show confirmation page (no DB write yet)
+        require __DIR__ . '/../../views/appointments/confirm.php';
+    }
 
 
-   public function cancel(string $id): string
+    public function finalize(): void
+    {
+        $hairdresserId = (int)$_POST['hairdresser_id'];
+        $serviceId     = (int)$_POST['service_id'];
+        $dateYmd       = $_POST['appointment_date'];
+        $timeHi        = $_POST['appointment_time'];
+
+        $userId = 1; // until auth
+
+        $repo = new AppointmentRepository();
+
+        // Safety check (race condition protection)
+        if ($this->overlapsExisting($hairdresserId, $serviceId, $dateYmd, $timeHi)) {
+            http_response_code(409);
+            echo 'Slot no longer available.';
+            return;
+        }
+
+        $repo->create(
+            $hairdresserId,
+            $serviceId,
+            $userId,
+            $dateYmd,
+            $timeHi,
+            'booked'
+        );
+
+        header('Location: /appointments');
+        exit;
+    }
+
+
+    public function slots(): void
+    {
+        $hairdresserId = (int)($_GET['hairdresser_id'] ?? 0);
+        $serviceId     = (int)($_GET['service_id'] ?? 0);
+        $dateYmd       = trim((string)($_GET['date'] ?? ''));
+
+        $errors = [];
+        if ($hairdresserId <= 0) $errors[] = 'hairdresser_id required';
+        if ($serviceId <= 0) $errors[] = 'service_id required';
+
+        $dt = \DateTimeImmutable::createFromFormat('Y-m-d', $dateYmd);
+        if ($dt === false || $dt->format('Y-m-d') !== $dateYmd) $errors[] = 'valid date required (Y-m-d)';
+
+        if ($errors) {
+            http_response_code(422);
+            header('Content-Type: application/json');
+            echo json_encode(['ok' => false, 'errors' => $errors]);
+            return;
+        }
+
+        $dayOfWeek = (int)$dt->format('N'); // 1..7
+
+        $availRepo = new \App\Repositories\AvailabilityRepository();
+        $serviceRepo = new \App\Repositories\ServiceRepository();
+        $apptRepo = new \App\Repositories\AppointmentRepository();
+
+        $window = $availRepo->findWindowFor($hairdresserId, $dayOfWeek);
+        $service = $serviceRepo->findById($serviceId);
+
+        if ($window === null || $service === null) {
+            header('Content-Type: application/json');
+            echo json_encode(['ok' => true, 'slots' => []]);
+            return;
+        }
+
+        $duration = (int)$service['duration_minutes'];
+        if ($duration <= 0) $duration = 30;
+
+        // 15-minute increments (typical booking UX)
+        $stepMinutes = 15;
+
+        $start = \DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $dateYmd . ' ' . $window['start_time']);
+        $end   = \DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $dateYmd . ' ' . $window['end_time']);
+
+        if ($start === false || $end === false || $end <= $start) {
+            header('Content-Type: application/json');
+            echo json_encode(['ok' => true, 'slots' => []]);
+            return;
+        }
+
+        // Existing bookings with their durations
+        $bookings = $apptRepo->bookingsForDate($hairdresserId, $dateYmd);
+
+        $slots = [];
+        $cursor = $start;
+        $latestStart = $end->modify("-{$duration} minutes");
+
+        while ($cursor <= $latestStart) {
+            $candidateStart = $cursor;
+            $candidateEnd = $candidateStart->modify("+{$duration} minutes");
+
+            $overlaps = false;
+            foreach ($bookings as $b) {
+                $bStart = \DateTimeImmutable::createFromFormat('Y-m-d H:i', $dateYmd . ' ' . $b['start_time']);
+                if ($bStart === false) continue;
+
+                $bDur = max(1, (int)$b['duration_minutes']);
+                $bEnd = $bStart->modify("+{$bDur} minutes");
+
+                // overlap if candidateStart < bEnd AND candidateEnd > bStart
+                if ($candidateStart < $bEnd && $candidateEnd > $bStart) {
+                    $overlaps = true;
+                    break;
+                }
+            }
+
+            if (!$overlaps) {
+                $slots[] = $candidateStart->format('H:i');
+            }
+
+            $cursor = $cursor->modify("+{$stepMinutes} minutes");
+        }
+
+        header('Content-Type: application/json');
+        echo json_encode(['ok' => true, 'slots' => $slots]);
+    }
+
+
+    public function cancel(string $id): string
     {
         $id = (int)$id;
 
@@ -349,6 +362,4 @@ public function slots(): void
 
         return $this->redirect('/appointments/' . $id);
     }
-
-
 }

@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace App\Repositories;
@@ -90,9 +91,41 @@ final class AppointmentRepository
     }
 
     /** @return array<int, array<string, mixed>> */
-   public function allWithDetails(): array
-{
-    $sql = "
+    public function allWithDetails(?string $filter = null): array
+    {
+        $filter = $filter ? strtolower(trim($filter)) : 'all';
+
+        $where = '';
+        $params = [];
+
+        switch ($filter) {
+            case 'cancelled':
+                $where = "WHERE a.status = :status";
+                $params[':status'] = 'cancelled';
+                $orderBy = "ORDER BY a.appointment_date DESC, a.appointment_time DESC, a.id DESC";
+                break;
+
+            case 'completed':
+                $where = "WHERE a.status = :status";
+                $params[':status'] = 'completed';
+                $orderBy = "ORDER BY a.appointment_date DESC, a.appointment_time DESC, a.id DESC";
+                break;
+
+            case 'all':
+                $orderBy = "ORDER BY a.appointment_date ASC, a.appointment_time ASC, a.id ASC";
+                break;
+
+            case 'upcoming':
+            default:
+                // Upcoming: booked appointments from today onward
+                $where = "WHERE a.status = :status AND (a.appointment_date > CURDATE()
+                OR (a.appointment_date = CURDATE() AND a.appointment_time >= CURTIME()))";
+                $params[':status'] = 'booked';
+                $orderBy = "ORDER BY a.appointment_date ASC, a.appointment_time ASC, a.id ASC";
+                break;
+        }
+
+        $sql = "
         SELECT
             a.id,
             a.appointment_date,
@@ -108,12 +141,16 @@ final class AppointmentRepository
         JOIN hairdressers h ON h.id = a.hairdresser_id
         JOIN services s ON s.id = a.service_id
         JOIN users u ON u.id = a.user_id
-        ORDER BY a.appointment_date DESC, a.appointment_time DESC, a.id DESC
+        $where
+        $orderBy
     ";
 
-    $stmt = $this->pdo->query($sql);
-    return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
-}
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
 
 
     public function findWithDetails(int $id): ?array
@@ -146,12 +183,11 @@ final class AppointmentRepository
     }
 
     public function cancel(int $id): bool
-{
-    $sql = "UPDATE appointments SET status = 'cancelled' WHERE id = :id";
-    $stmt = $this->pdo->prepare($sql);
-    $stmt->execute(['id' => $id]);
+    {
+        $sql = "UPDATE appointments SET status = 'cancelled' WHERE id = :id";
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute(['id' => $id]);
 
-    return $stmt->rowCount() > 0;
-}
-
+        return $stmt->rowCount() > 0;
+    }
 }
