@@ -90,34 +90,31 @@ final class AppointmentRepository
     }
 
     /** @return array<int, array<string, mixed>> */
-    public function allWithDetails(): array
-    {
-        $stmt = $this->pdo->query(
-            'SELECT
-                a.id,
-                a.appointment_date,
-                a.appointment_time,
-                a.status,
+   public function allWithDetails(): array
+{
+    $sql = "
+        SELECT
+            a.id,
+            a.appointment_date,
+            a.appointment_time,
+            a.status,
+            h.name AS hairdresser_name,
+            s.name AS service_name,
+            s.duration_minutes AS service_duration_minutes,
+            s.price AS service_price,
+            u.email AS user_email,
+            u.role AS user_role
+        FROM appointments a
+        JOIN hairdressers h ON h.id = a.hairdresser_id
+        JOIN services s ON s.id = a.service_id
+        JOIN users u ON u.id = a.user_id
+        ORDER BY a.appointment_date DESC, a.appointment_time DESC, a.id DESC
+    ";
 
-                h.name AS hairdresser_name,
+    $stmt = $this->pdo->query($sql);
+    return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+}
 
-                s.name AS service_name,
-                s.duration_minutes AS service_duration_minutes,
-                s.price AS service_price,
-
-                u.email AS user_email,
-                u.role AS user_role
-
-             FROM appointments a
-             JOIN hairdressers h ON h.id = a.hairdresser_id
-             JOIN services s ON s.id = a.service_id
-             JOIN users u ON u.id = a.user_id
-
-             ORDER BY a.appointment_date DESC, a.appointment_time DESC'
-        );
-
-        return $stmt->fetchAll();
-    }
 
     public function findWithDetails(int $id): ?array
     {

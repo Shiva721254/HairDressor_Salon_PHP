@@ -27,7 +27,7 @@ $dispatcher = simpleDispatcher(function (RouteCollector $r) {
     $r->addRoute('GET', '/db/health', ['App\Controllers\DbController', 'health']);
 
     $r->addRoute('GET', '/services', ['App\Controllers\ServiceController', 'index']);
-    
+
 
 
     // Hairdressers
@@ -37,7 +37,8 @@ $dispatcher = simpleDispatcher(function (RouteCollector $r) {
 
     // Appointments
     $r->addRoute('GET',  '/appointments',        ['App\Controllers\AppointmentController', 'index']);
-    $r->addRoute('GET',  '/appointments/create', ['App\Controllers\AppointmentController', 'create']);
+    $r->addRoute('GET', '/appointments/new', ['App\Controllers\AppointmentController', 'create']);
+    $r->addRoute('GET', '/appointments/create', ['App\Controllers\AppointmentController', 'create']);
     $r->addRoute('GET',  '/appointments/slots',  ['App\Controllers\AppointmentController', 'slots']);
     $r->addRoute('POST', '/appointments/confirm', ['App\Controllers\AppointmentController', 'confirm']);
     $r->addRoute('POST', '/appointments/finalize', ['App\Controllers\AppointmentController', 'finalize']);

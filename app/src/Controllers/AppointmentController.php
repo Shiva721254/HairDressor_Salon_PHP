@@ -10,7 +10,50 @@ use App\Repositories\ServiceRepository;
 
 final class AppointmentController extends Controller
 {
-    public function create(): void
+public function index(): string
+{
+    $repo = new AppointmentRepository();
+    $appointments = $repo->allWithDetails();
+
+    $success = $this->flash('success');
+    $error = $this->flash('error');
+
+    return $this->render('appointments/index', [
+        'title' => 'Appointments',
+        'appointments' => $appointments,
+        'success' => $success,
+        'error' => $error,
+    ]);
+}   
+
+public function show(string $id): string
+{
+    $id = (int) $id;
+
+    if ($id <= 0) {
+        http_response_code(404);
+        return $this->render('errors/404', [
+            'title' => 'Invalid appointment'
+        ]);
+    }
+
+    $repo = new AppointmentRepository();
+    $appointment = $repo->findWithDetails($id);
+
+    if ($appointment === null) {
+        http_response_code(404);
+        return $this->render('errors/404', [
+            'title' => 'Appointment not found'
+        ]);
+    }
+
+    return $this->render('appointments/show', [
+        'title' => 'Appointment Details',
+        'appointment' => $appointment
+    ]);
+}
+
+public function create(): void
     {
         $hairRepo = new HairdresserRepository();
         $serviceRepo = new ServiceRepository();
@@ -109,6 +152,87 @@ final class AppointmentController extends Controller
     return false;
 }
 
+public function confirm(): void
+{
+    $hairdresserId = (int)($_POST['hairdresser_id'] ?? 0);
+    $serviceId     = (int)($_POST['service_id'] ?? 0);
+    $dateYmd       = trim((string)($_POST['appointment_date'] ?? ''));
+    $timeHi        = trim((string)($_POST['appointment_time'] ?? ''));
+
+    $errors = [];
+
+    if ($hairdresserId <= 0) $errors[] = 'Select a hairdresser.';
+    if ($serviceId <= 0) $errors[] = 'Select a service.';
+
+    $dt = \DateTimeImmutable::createFromFormat('Y-m-d', $dateYmd);
+    if ($dt === false || $dt->format('Y-m-d') !== $dateYmd) $errors[] = 'Invalid appointment date.';
+
+    $tm = \DateTimeImmutable::createFromFormat('H:i', $timeHi);
+    if ($tm === false || $tm->format('H:i') !== $timeHi) $errors[] = 'Invalid appointment time.';
+
+    // If validation fails, re-render create page with data
+    if ($errors) {
+        $hairRepo = new HairdresserRepository();
+        $serviceRepo = new ServiceRepository();
+        $hairdressers = $hairRepo->all();
+        $services = $serviceRepo->all();
+        require __DIR__ . '/../../views/appointments/create.php';
+        return;
+    }
+
+    // Load selected entities for display
+    $hairRepo = new HairdresserRepository();
+    $serviceRepo = new ServiceRepository();
+
+    $hairdresser = $hairRepo->findById($hairdresserId);
+    $service     = $serviceRepo->findById($serviceId);
+
+    if ($hairdresser === null) $errors[] = 'Selected hairdresser not found.';
+    if ($service === null) $errors[] = 'Selected service not found.';
+
+    if ($errors) {
+        $hairdressers = $hairRepo->all();
+        $services = $serviceRepo->all();
+        require __DIR__ . '/../../views/appointments/create.php';
+        return;
+    }
+
+    // Show confirmation page (no DB write yet)
+    require __DIR__ . '/../../views/appointments/confirm.php';
+}
+
+
+public function finalize(): void
+{
+    $hairdresserId = (int)$_POST['hairdresser_id'];
+    $serviceId     = (int)$_POST['service_id'];
+    $dateYmd       = $_POST['appointment_date'];
+    $timeHi        = $_POST['appointment_time'];
+
+    $userId = 1; // until auth
+
+    $repo = new AppointmentRepository();
+
+    // Safety check (race condition protection)
+    if ($this->overlapsExisting($hairdresserId, $serviceId, $dateYmd, $timeHi)) {
+        http_response_code(409);
+        echo 'Slot no longer available.';
+        return;
+    }
+
+    $repo->create(
+        $hairdresserId,
+        $serviceId,
+        $userId,
+        $dateYmd,
+        $timeHi,
+        'booked'
+    );
+
+    header('Location: /appointments');
+    exit;
+}
+
 
 public function slots(): void
 {
@@ -198,173 +322,33 @@ public function slots(): void
 }
 
 
+   public function cancel(string $id): string
+    {
+        $id = (int)$id;
 
+        if ($id <= 0) {
+            http_response_code(404);
+            return $this->render('errors/404', ['title' => 'Invalid appointment']);
+        }
 
-public function confirm(): void
-{
-    $hairdresserId = (int)($_POST['hairdresser_id'] ?? 0);
-    $serviceId     = (int)($_POST['service_id'] ?? 0);
-    $dateYmd       = trim((string)($_POST['appointment_date'] ?? ''));
-    $timeHi        = trim((string)($_POST['appointment_time'] ?? ''));
+        $repo = new AppointmentRepository();
+        $appointment = $repo->findWithDetails($id);
 
-    $errors = [];
+        if ($appointment === null) {
+            http_response_code(404);
+            return $this->render('errors/404', ['title' => 'Appointment not found']);
+        }
 
-    if ($hairdresserId <= 0) $errors[] = 'Select a hairdresser.';
-    if ($serviceId <= 0) $errors[] = 'Select a service.';
+        if (($appointment['status'] ?? '') === 'cancelled') {
+            $this->flash('success', 'Appointment already cancelled.');
+            return $this->redirect('/appointments/' . $id);
+        }
 
-    $dt = \DateTimeImmutable::createFromFormat('Y-m-d', $dateYmd);
-    if ($dt === false || $dt->format('Y-m-d') !== $dateYmd) $errors[] = 'Invalid appointment date.';
-
-    $tm = \DateTimeImmutable::createFromFormat('H:i', $timeHi);
-    if ($tm === false || $tm->format('H:i') !== $timeHi) $errors[] = 'Invalid appointment time.';
-
-    // If validation fails, re-render create page with data
-    if ($errors) {
-        $hairRepo = new HairdresserRepository();
-        $serviceRepo = new ServiceRepository();
-        $hairdressers = $hairRepo->all();
-        $services = $serviceRepo->all();
-        require __DIR__ . '/../../views/appointments/create.php';
-        return;
-    }
-
-    // Load selected entities for display
-    $hairRepo = new HairdresserRepository();
-    $serviceRepo = new ServiceRepository();
-
-    $hairdresser = $hairRepo->findById($hairdresserId);
-    $service     = $serviceRepo->findById($serviceId);
-
-    if ($hairdresser === null) $errors[] = 'Selected hairdresser not found.';
-    if ($service === null) $errors[] = 'Selected service not found.';
-
-    if ($errors) {
-        $hairdressers = $hairRepo->all();
-        $services = $serviceRepo->all();
-        require __DIR__ . '/../../views/appointments/create.php';
-        return;
-    }
-
-    // Show confirmation page (no DB write yet)
-    require __DIR__ . '/../../views/appointments/confirm.php';
-}
-
-public function finalize(): void
-{
-    $hairdresserId = (int)$_POST['hairdresser_id'];
-    $serviceId     = (int)$_POST['service_id'];
-    $dateYmd       = $_POST['appointment_date'];
-    $timeHi        = $_POST['appointment_time'];
-
-    $userId = 1; // until auth
-
-    $repo = new AppointmentRepository();
-
-    // Safety check (race condition protection)
-    if ($this->overlapsExisting($hairdresserId, $serviceId, $dateYmd, $timeHi)) {
-        http_response_code(409);
-        echo 'Slot no longer available.';
-        return;
-    }
-
-    $repo->create(
-        $hairdresserId,
-        $serviceId,
-        $userId,
-        $dateYmd,
-        $timeHi,
-        'booked'
-    );
-
-    header('Location: /appointments');
-    exit;
-}
-
-public function show(string $id): string
-{
-    $id = (int) $id;
-
-    if ($id <= 0) {
-        http_response_code(404);
-        return $this->render('errors/404', [
-            'title' => 'Invalid appointment'
-        ]);
-    }
-
-    $repo = new AppointmentRepository();
-    $appointment = $repo->findWithDetails($id);
-
-    if ($appointment === null) {
-        http_response_code(404);
-        return $this->render('errors/404', [
-            'title' => 'Appointment not found'
-        ]);
-    }
-
-    return $this->render('appointments/show', [
-        'title' => 'Appointment Details',
-        'appointment' => $appointment
-    ]);
-}
-
-public function cancel(string $id): string
-{
-    $id = (int)$id;
-    if ($id <= 0) {
-        http_response_code(404);
-        return $this->render('errors/404', ['title' => 'Invalid appointment']);
-    }
-
-    $repo = new AppointmentRepository();
-
-    $appointment = $repo->findWithDetails($id);
-    if ($appointment === null) {
-        http_response_code(404);
-        return $this->render('errors/404', ['title' => 'Appointment not found']);
-    }
-
-    // Already cancelled
-    if (($appointment['status'] ?? '') === 'cancelled') {
-        $this->flash('success', 'Appointment is already cancelled.');
-        return $this->redirect('/appointments/' . $id);
-    }
-
-    // 🔽 ADD THIS BLOCK HERE
-    $today = date('Y-m-d');
-    if (($appointment['appointment_date'] ?? '') < $today) {
-        $this->flash('error', 'Past appointments cannot be cancelled.');
-        return $this->redirect('/appointments/' . $id);
-    }
-
-    $ok = $repo->cancel($id);
-
-    if ($ok) {
+        $repo->cancel($id);
         $this->flash('success', 'Appointment cancelled successfully.');
-    } else {
-        $this->flash('error', 'Failed to cancel appointment.');
+
+        return $this->redirect('/appointments/' . $id);
     }
-
-    return $this->redirect('/appointments/' . $id);
-}
-
-
-
-
-
-
-
-public function index(): string
-{
-    $repo = new AppointmentRepository();
-    $appointments = $repo->allWithDetails();
-
-    return $this->render('appointments/index', [
-        'title' => 'Appointments',
-        'appointments' => $appointments,
-    ]);
-}
-
-
 
 
 }
