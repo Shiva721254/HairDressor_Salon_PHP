@@ -28,6 +28,15 @@ $dispatcher = simpleDispatcher(function (RouteCollector $r) {
 
     $r->addRoute('GET', '/services', ['App\Controllers\ServiceController', 'index']);
 
+// Auth
+$r->addRoute('GET',  '/login',  ['App\Controllers\AuthController', 'showLogin']);
+$r->addRoute('POST', '/login',  ['App\Controllers\AuthController', 'login']);
+$r->addRoute('POST', '/logout', ['App\Controllers\AuthController', 'logout']);
+
+
+//register
+$r->addRoute('GET',  '/register',  ['App\Controllers\AuthController', 'showRegister']);
+$r->addRoute('POST', '/register',  ['App\Controllers\AuthController', 'register']);
 
 
     // Hairdressers
