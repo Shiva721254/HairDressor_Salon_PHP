@@ -21,6 +21,14 @@ function navLink(string $href, string $label, string $currentPath): string {
 
 <a class="visually-hidden-focusable" href="#main-content">Skip to main content</a>
 
+<a class="nav-link" href="/hairdressers">Hairdressers</a>
+
+<a class="nav-link" href="/services">Services</a>
+<a class="nav-link" href="/appointments/new">Book</a>
+
+
+
+
 <nav class="navbar navbar-expand-lg bg-body-tertiary border-bottom">
     <div class="container">
         <a class="navbar-brand" href="/">Salon</a>

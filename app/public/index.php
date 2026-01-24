@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
+use App\Core\Env;
 use FastRoute\RouteCollector;
 use function FastRoute\simpleDispatcher;
 
@@ -10,33 +11,62 @@ use function FastRoute\simpleDispatcher;
 // Start session (needed for auth later)
 // --------------------------------------------------
 session_start();
-
+Env::load(__DIR__ . '/../.env');
 // --------------------------------------------------
 // Define routes
 // --------------------------------------------------
 $dispatcher = simpleDispatcher(function (RouteCollector $r) {
-    // Home
     $r->addRoute('GET', '/', ['App\Controllers\HomeController', 'home']);
-
-    // Hello (example)
-    $r->addRoute('GET', '/hello/{name}', ['App\Controllers\HelloController', 'greet']);
-
-    // Contact (MVC version)
+    $r->addRoute('GET', '/hello/{name}', ['App\Controllers\HelloController', 'greet']);   
+   // Home and Contact
     $r->addRoute('GET', '/contact', ['App\Controllers\HomeController', 'contact']);
     $r->addRoute('POST', '/contact', ['App\Controllers\HomeController', 'submitContact']);
-});
+   
+    // Services
+    $r->addRoute('GET', '/db/health', ['App\Controllers\DbController', 'health']);
+    $r->addRoute('GET', '/services', ['App\Controllers\ServiceController', 'index']);
+  
+    // Hairdressers
+    $r->addRoute('GET',  '/hairdressers',  ['App\Controllers\HairdresserController', 'index']);
+    $r->addRoute('GET',  '/hairdressers/{id:\d+}', ['App\Controllers\HairdresserController', 'show']);
+
+
+// Appointments
+$r->addRoute('GET',  '/appointments',        ['App\Controllers\AppointmentController', 'index']);
+$r->addRoute('GET',  '/appointments/create', ['App\Controllers\AppointmentController', 'create']);
+$r->addRoute('GET',  '/appointments/slots',  ['App\Controllers\AppointmentController', 'slots']);
+$r->addRoute('POST', '/appointments/confirm', ['App\Controllers\AppointmentController', 'confirm']);
+$r->addRoute('POST', '/appointments/finalize', ['App\Controllers\AppointmentController', 'finalize']);
+
+
+
+
+
+
+
+    });
 
 // --------------------------------------------------
 // Fetch HTTP method and URI
 // --------------------------------------------------
 $httpMethod = $_SERVER['REQUEST_METHOD'];
-$uri = $_SERVER['REQUEST_URI'];
 
-// Remove query string (?a=b)
+// Prefer explicit query routing: /index.php?route=/appointments
+$uri = $_GET['route'] ?? $_SERVER['REQUEST_URI'];
+
+// If using REQUEST_URI, remove query string
 if (false !== $pos = strpos($uri, '?')) {
     $uri = substr($uri, 0, $pos);
 }
+
 $uri = rawurldecode($uri);
+
+// Normalize: ensure leading slash; trim trailing slash (except root)
+$uri = '/' . ltrim($uri, '/');
+if ($uri !== '/' && str_ends_with($uri, '/')) {
+    $uri = rtrim($uri, '/');
+}
+
 
 // --------------------------------------------------
 // Dispatch route

@@ -1,3 +1,5 @@
+version: "3.9"
+
 services:
   nginx:
     image: nginx:latest
@@ -34,6 +36,7 @@ services:
       MYSQL_DATABASE: developmentdb
     volumes:
       - mysqldata:/var/lib/mysql
+      - ./app/database/init:/docker-entrypoint-initdb.d:ro
     ports:
       - "3306:3306"
 
