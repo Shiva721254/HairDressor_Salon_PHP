@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace App\Controllers;
@@ -15,7 +16,7 @@ final class ServiceController extends Controller
 
         return $this->render('services/index', [
             'title' => 'Services',
-            'services' => $services
+            'services' => $services,
         ]);
     }
 }

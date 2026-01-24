@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 require_once __DIR__ . '/../vendor/autoload.php';
@@ -17,36 +18,32 @@ Env::load(__DIR__ . '/../.env');
 // --------------------------------------------------
 $dispatcher = simpleDispatcher(function (RouteCollector $r) {
     $r->addRoute('GET', '/', ['App\Controllers\HomeController', 'home']);
-    $r->addRoute('GET', '/hello/{name}', ['App\Controllers\HelloController', 'greet']);   
-   // Home and Contact
+    $r->addRoute('GET', '/hello/{name}', ['App\Controllers\HelloController', 'greet']);
+    // Home and Contact
     $r->addRoute('GET', '/contact', ['App\Controllers\HomeController', 'contact']);
     $r->addRoute('POST', '/contact', ['App\Controllers\HomeController', 'submitContact']);
-   
+
     // Services
     $r->addRoute('GET', '/db/health', ['App\Controllers\DbController', 'health']);
+
     $r->addRoute('GET', '/services', ['App\Controllers\ServiceController', 'index']);
-  
+    
+
+
     // Hairdressers
     $r->addRoute('GET',  '/hairdressers',  ['App\Controllers\HairdresserController', 'index']);
     $r->addRoute('GET',  '/hairdressers/{id:\d+}', ['App\Controllers\HairdresserController', 'show']);
 
 
-// Appointments
-$r->addRoute('GET',  '/appointments',        ['App\Controllers\AppointmentController', 'index']);
-$r->addRoute('GET',  '/appointments/create', ['App\Controllers\AppointmentController', 'create']);
-$r->addRoute('GET',  '/appointments/slots',  ['App\Controllers\AppointmentController', 'slots']);
-$r->addRoute('POST', '/appointments/confirm', ['App\Controllers\AppointmentController', 'confirm']);
-$r->addRoute('POST', '/appointments/finalize', ['App\Controllers\AppointmentController', 'finalize']);
-$r->addRoute('GET', '/appointments/{id:\d+}', ['App\Controllers\AppointmentController', 'show']);
-$r->addRoute('POST', '/appointments/{id:\d+}/cancel', ['App\Controllers\AppointmentController', 'cancel']);
-
-
-
-
-
-
-
-    });
+    // Appointments
+    $r->addRoute('GET',  '/appointments',        ['App\Controllers\AppointmentController', 'index']);
+    $r->addRoute('GET',  '/appointments/create', ['App\Controllers\AppointmentController', 'create']);
+    $r->addRoute('GET',  '/appointments/slots',  ['App\Controllers\AppointmentController', 'slots']);
+    $r->addRoute('POST', '/appointments/confirm', ['App\Controllers\AppointmentController', 'confirm']);
+    $r->addRoute('POST', '/appointments/finalize', ['App\Controllers\AppointmentController', 'finalize']);
+    $r->addRoute('GET', '/appointments/{id:\d+}', ['App\Controllers\AppointmentController', 'show']);
+    $r->addRoute('POST', '/appointments/{id:\d+}/cancel', ['App\Controllers\AppointmentController', 'cancel']);
+});
 
 // --------------------------------------------------
 // Fetch HTTP method and URI

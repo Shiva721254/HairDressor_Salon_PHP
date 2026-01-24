@@ -15,12 +15,13 @@ final class HairdresserRepository
         $this->pdo = Db::pdo();
     }
 
-    public function all(): array
-    {
-        return $this->pdo->query(
-            'SELECT * FROM hairdressers ORDER BY name'
-        )->fetchAll();
-    }
+  public function all(): array
+{
+    $sql = "SELECT id, name FROM hairdressers ORDER BY name";
+    $stmt = $this->pdo->query($sql);
+    return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+}
+
 
     // ✅ ADD IT HERE
     public function findById(int $id): ?array

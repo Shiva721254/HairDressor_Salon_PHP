@@ -16,11 +16,13 @@ final class ServiceRepository
     }
 
     /** @return array<int, array<string, mixed>> */
-    public function all(): array
-    {
-        $stmt = $this->pdo->query('SELECT id, name, price FROM services ORDER BY name');
-        return $stmt->fetchAll();
-    }
+   public function all(): array
+{
+    $sql = "SELECT id, name, duration_minutes, price FROM services ORDER BY name";
+    $stmt = $this->pdo->query($sql);
+    return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+}
+
 
 public function findById(int $id): ?array
 {
