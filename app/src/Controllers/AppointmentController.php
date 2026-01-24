@@ -307,6 +307,49 @@ public function show(string $id): string
     ]);
 }
 
+public function cancel(string $id): string
+{
+    $id = (int)$id;
+    if ($id <= 0) {
+        http_response_code(404);
+        return $this->render('errors/404', ['title' => 'Invalid appointment']);
+    }
+
+    $repo = new AppointmentRepository();
+
+    $appointment = $repo->findWithDetails($id);
+    if ($appointment === null) {
+        http_response_code(404);
+        return $this->render('errors/404', ['title' => 'Appointment not found']);
+    }
+
+    // Already cancelled
+    if (($appointment['status'] ?? '') === 'cancelled') {
+        $this->flash('success', 'Appointment is already cancelled.');
+        return $this->redirect('/appointments/' . $id);
+    }
+
+    // 🔽 ADD THIS BLOCK HERE
+    $today = date('Y-m-d');
+    if (($appointment['appointment_date'] ?? '') < $today) {
+        $this->flash('error', 'Past appointments cannot be cancelled.');
+        return $this->redirect('/appointments/' . $id);
+    }
+
+    $ok = $repo->cancel($id);
+
+    if ($ok) {
+        $this->flash('success', 'Appointment cancelled successfully.');
+    } else {
+        $this->flash('error', 'Failed to cancel appointment.');
+    }
+
+    return $this->redirect('/appointments/' . $id);
+}
+
+
+
+
 
 
 

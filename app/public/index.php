@@ -38,6 +38,7 @@ $r->addRoute('GET',  '/appointments/slots',  ['App\Controllers\AppointmentContro
 $r->addRoute('POST', '/appointments/confirm', ['App\Controllers\AppointmentController', 'confirm']);
 $r->addRoute('POST', '/appointments/finalize', ['App\Controllers\AppointmentController', 'finalize']);
 $r->addRoute('GET', '/appointments/{id:\d+}', ['App\Controllers\AppointmentController', 'show']);
+$r->addRoute('POST', '/appointments/{id:\d+}/cancel', ['App\Controllers\AppointmentController', 'cancel']);
 
 
 

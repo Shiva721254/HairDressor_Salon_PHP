@@ -39,4 +39,18 @@
     </tr>
 </table>
 
+<div class="d-flex gap-2 mt-3">
+    <a href="/appointments" class="btn btn-secondary">Back to overview</a>
+
+    <?php if (($appointment['status'] ?? '') !== 'cancelled'): ?>
+        <form method="post" action="/appointments/<?= (int)$appointment['id'] ?>/cancel"
+              onsubmit="return confirm('Cancel this appointment?');">
+            <button type="submit" class="btn btn-danger">Cancel appointment</button>
+        </form>
+    <?php else: ?>
+        <span class="badge text-bg-secondary align-self-center">Cancelled</span>
+    <?php endif; ?>
+</div>
+
+
 <a href="/appointments" class="btn btn-secondary mt-3">Back to overview</a>

@@ -147,4 +147,14 @@ final class AppointmentRepository
         $row = $stmt->fetch(\PDO::FETCH_ASSOC);
         return $row ?: null;
     }
+
+    public function cancel(int $id): bool
+{
+    $sql = "UPDATE appointments SET status = 'cancelled' WHERE id = :id";
+    $stmt = $this->pdo->prepare($sql);
+    $stmt->execute(['id' => $id]);
+
+    return $stmt->rowCount() > 0;
+}
+
 }
