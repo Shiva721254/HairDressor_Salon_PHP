@@ -118,4 +118,33 @@ final class AppointmentRepository
 
         return $stmt->fetchAll();
     }
+
+    public function findWithDetails(int $id): ?array
+    {
+        $sql = "
+            SELECT 
+                a.id,
+                a.appointment_date,
+                a.appointment_time,
+                a.status,
+                hd.name AS hairdresser_name,
+                s.name  AS service_name,
+                s.duration_minutes,
+                s.price,
+                u.email AS user_email,
+                u.role  AS user_role
+            FROM appointments a
+            JOIN hairdressers hd ON hd.id = a.hairdresser_id
+            JOIN services s      ON s.id  = a.service_id
+            LEFT JOIN users u    ON u.id  = a.user_id
+            WHERE a.id = :id
+            LIMIT 1
+        ";
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute(['id' => $id]);
+
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+        return $row ?: null;
+    }
 }

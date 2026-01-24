@@ -37,6 +37,7 @@ $r->addRoute('GET',  '/appointments/create', ['App\Controllers\AppointmentContro
 $r->addRoute('GET',  '/appointments/slots',  ['App\Controllers\AppointmentController', 'slots']);
 $r->addRoute('POST', '/appointments/confirm', ['App\Controllers\AppointmentController', 'confirm']);
 $r->addRoute('POST', '/appointments/finalize', ['App\Controllers\AppointmentController', 'finalize']);
+$r->addRoute('GET', '/appointments/{id:\d+}', ['App\Controllers\AppointmentController', 'show']);
 
 
 
@@ -99,6 +100,7 @@ switch ($routeInfo[0]) {
         }
 
         // Call controller method and output result
-        echo $controller->$method($vars);
+        echo $controller->$method(...array_values($vars));
+
         break;
 }

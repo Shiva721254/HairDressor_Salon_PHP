@@ -2,12 +2,13 @@
 declare(strict_types=1);
 
 namespace App\Controllers;
+use App\Core\Controller;
 
 use App\Repositories\AppointmentRepository;
 use App\Repositories\HairdresserRepository;
 use App\Repositories\ServiceRepository;
 
-final class AppointmentController
+final class AppointmentController extends Controller
 {
     public function create(): void
     {
@@ -279,14 +280,48 @@ public function finalize(): void
     exit;
 }
 
+public function show(string $id): string
+{
+    $id = (int) $id;
 
-
-
-    public function index(): void
-    {
-        $repo = new AppointmentRepository();
-        $appointments = $repo->allWithDetails();
-
-        require __DIR__ . '/../../views/appointments/index.php';
+    if ($id <= 0) {
+        http_response_code(404);
+        return $this->render('errors/404', [
+            'title' => 'Invalid appointment'
+        ]);
     }
+
+    $repo = new AppointmentRepository();
+    $appointment = $repo->findWithDetails($id);
+
+    if ($appointment === null) {
+        http_response_code(404);
+        return $this->render('errors/404', [
+            'title' => 'Appointment not found'
+        ]);
+    }
+
+    return $this->render('appointments/show', [
+        'title' => 'Appointment Details',
+        'appointment' => $appointment
+    ]);
+}
+
+
+
+
+public function index(): string
+{
+    $repo = new AppointmentRepository();
+    $appointments = $repo->allWithDetails();
+
+    return $this->render('appointments/index', [
+        'title' => 'Appointments',
+        'appointments' => $appointments,
+    ]);
+}
+
+
+
+
 }

@@ -15,7 +15,9 @@ abstract class Controller
      */
     protected function render(string $view, array $data = []): string
     {
-        $viewsRoot = dirname(__DIR__, 2) . '/views'; // app/views
+        // Views live under /app/views inside the container
+        // From app/src/Core, go up 2 levels to reach /app, then into /views
+        $viewsRoot = dirname(__DIR__, 2) . '/views';
         $viewFile  = $viewsRoot . '/' . $view . '.php';
         $layoutFile = $viewsRoot . '/layouts/main.php';
 
