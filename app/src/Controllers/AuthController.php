@@ -10,14 +10,23 @@ final class AuthController extends Controller
 {
     public function showLogin(): string
     {
+        // Optional: redirect already logged-in users away from login page
+        if ($this->currentUser() !== null) {
+            return $this->redirect('/appointments');
+        }
+
         return $this->render('auth/login', [
             'title' => 'Login',
             'errors' => [],
+            'oldEmail' => '',
         ]);
     }
 
     public function login(): string
     {
+        // ✅ CSRF protection
+        $this->requireCsrf();
+
         $email = trim((string)($_POST['email'] ?? ''));
         $password = (string)($_POST['password'] ?? '');
 
@@ -34,6 +43,7 @@ final class AuthController extends Controller
             return $this->render('auth/login', [
                 'title' => 'Login',
                 'errors' => $errors,
+                'oldEmail' => $email,
             ]);
         }
 
@@ -45,6 +55,7 @@ final class AuthController extends Controller
             return $this->render('auth/login', [
                 'title' => 'Login',
                 'errors' => ['Invalid email or password.'],
+                'oldEmail' => $email,
             ]);
         }
 
@@ -61,6 +72,9 @@ final class AuthController extends Controller
 
     public function logout(): string
     {
+        // ✅ CSRF protection
+        $this->requireCsrf();
+
         unset($_SESSION['user']);
         $this->flash('success', 'Logged out.');
         return $this->redirect('/');

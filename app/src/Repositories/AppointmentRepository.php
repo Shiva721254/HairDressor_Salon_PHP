@@ -90,51 +90,67 @@ final class AppointmentRepository
         return (int)$this->pdo->lastInsertId();
     }
 
-    /** @return array<int, array<string, mixed>> */
-    public function allWithDetails(?string $filter = null): array
-    {
-        $filter = $filter ? strtolower(trim($filter)) : 'all';
 
-        $where = '';
-        $params = [];
+    /**
+     * Get appointment list with joined details.
+     * If $userId is provided, results are restricted to that user (client view).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+   public function allWithDetails(?string $filter = null, ?int $userId = null): array
+{
+    $filter = $filter ? strtolower(trim($filter)) : 'all';
 
-        switch ($filter) {
-            case 'cancelled':
-                $where = "WHERE a.status = :status";
-                $params[':status'] = 'cancelled';
-                $orderBy = "ORDER BY a.appointment_date DESC, a.appointment_time DESC, a.id DESC";
-                break;
+    $whereParts = [];
+    $params = [];
+    $orderBy = "ORDER BY a.appointment_date ASC, a.appointment_time ASC, a.id ASC";
 
-            case 'completed':
-                $where = "WHERE a.status = :status";
-                $params[':status'] = 'completed';
-                $orderBy = "ORDER BY a.appointment_date DESC, a.appointment_time DESC, a.id DESC";
-                break;
+    // Optional scope: only appointments of a specific user (client view)
+    if ($userId !== null) {
+        $whereParts[] = "a.user_id = :uid";
+        $params['uid'] = $userId;
+    }
 
-            case 'all':
-                $orderBy = "ORDER BY a.appointment_date ASC, a.appointment_time ASC, a.id ASC";
-                break;
+    switch ($filter) {
+        case 'cancelled':
+            $whereParts[] = "a.status = :status";
+            $params['status'] = 'cancelled';
+            $orderBy = "ORDER BY a.appointment_date DESC, a.appointment_time DESC, a.id DESC";
+            break;
 
-            case 'upcoming':
-            default:
-                // Upcoming: booked appointments from today onward
-                $where = "WHERE a.status = :status AND (a.appointment_date > CURDATE()
+        case 'completed':
+            $whereParts[] = "a.status = :status";
+            $params['status'] = 'completed';
+            $orderBy = "ORDER BY a.appointment_date DESC, a.appointment_time DESC, a.id DESC";
+            break;
+
+        case 'all':
+            // no extra filters
+            break;
+
+        case 'upcoming':
+        default:
+            $whereParts[] = "a.status = :status";
+            $params['status'] = 'booked';
+            $whereParts[] = "(a.appointment_date > CURDATE()
                 OR (a.appointment_date = CURDATE() AND a.appointment_time >= CURTIME()))";
-                $params[':status'] = 'booked';
-                $orderBy = "ORDER BY a.appointment_date ASC, a.appointment_time ASC, a.id ASC";
-                break;
-        }
+            $orderBy = "ORDER BY a.appointment_date ASC, a.appointment_time ASC, a.id ASC";
+            break;
+    }
 
-        $sql = "
+    $where = $whereParts ? ('WHERE ' . implode(' AND ', $whereParts)) : '';
+
+    $sql = "
         SELECT
             a.id,
+            a.user_id,
             a.appointment_date,
             a.appointment_time,
             a.status,
             h.name AS hairdresser_name,
             s.name AS service_name,
-            s.duration_minutes AS service_duration_minutes,
-            s.price AS service_price,
+            s.duration_minutes AS duration_minutes,
+            s.price AS price,
             u.email AS user_email,
             u.role AS user_role
         FROM appointments a
@@ -145,44 +161,42 @@ final class AppointmentRepository
         $orderBy
     ";
 
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->execute($params);
+    $stmt = $this->pdo->prepare($sql);
+    $stmt->execute($params);
 
-        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
-    }
-
+    return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+}
 
 
     public function findWithDetails(int $id): ?array
-{
-    $sql = "
-        SELECT 
-            a.id,
-            a.user_id,              
-            a.appointment_date,
-            a.appointment_time,
-            a.status,
-            hd.name AS hairdresser_name,
-            s.name  AS service_name,
-            s.duration_minutes,
-            s.price,
-            u.email AS user_email,
-            u.role  AS user_role
-        FROM appointments a
-        JOIN hairdressers hd ON hd.id = a.hairdresser_id
-        JOIN services s      ON s.id  = a.service_id
-        LEFT JOIN users u    ON u.id  = a.user_id
-        WHERE a.id = :id
-        LIMIT 1
-    ";
+    {
+        $sql = "
+            SELECT 
+                a.id,
+                a.user_id,
+                a.appointment_date,
+                a.appointment_time,
+                a.status,
+                hd.name AS hairdresser_name,
+                s.name  AS service_name,
+                s.duration_minutes,
+                s.price,
+                u.email AS user_email,
+                u.role  AS user_role
+            FROM appointments a
+            JOIN hairdressers hd ON hd.id = a.hairdresser_id
+            JOIN services s      ON s.id  = a.service_id
+            LEFT JOIN users u    ON u.id  = a.user_id
+            WHERE a.id = :id
+            LIMIT 1
+        ";
 
-    $stmt = $this->pdo->prepare($sql);
-    $stmt->execute(['id' => $id]);
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute(['id' => $id]);
 
-    $row = $stmt->fetch(\PDO::FETCH_ASSOC);
-    return $row ?: null;
-}
-
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row ?: null;
+    }
 
     public function cancel(int $id): bool
     {
@@ -192,4 +206,25 @@ final class AppointmentRepository
 
         return $stmt->rowCount() > 0;
     }
+
+
+public function complete(int $id): bool
+{
+    $stmt = $this->pdo->prepare(
+        "UPDATE appointments
+         SET status = 'completed'
+         WHERE id = :id AND status = 'booked'"
+    );
+    $stmt->execute(['id' => $id]);
+
+    return $stmt->rowCount() > 0;
+}
+
+
+
+
+
+
+
+
 }

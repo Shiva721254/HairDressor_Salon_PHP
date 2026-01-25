@@ -17,42 +17,78 @@ Env::load(__DIR__ . '/../.env');
 // Define routes
 // --------------------------------------------------
 $dispatcher = simpleDispatcher(function (RouteCollector $r) {
+    // ==================================================
+    // PUBLIC PAGES
+    // ==================================================
     $r->addRoute('GET', '/', ['App\Controllers\HomeController', 'home']);
     $r->addRoute('GET', '/hello/{name}', ['App\Controllers\HelloController', 'greet']);
-    // Home and Contact
     $r->addRoute('GET', '/contact', ['App\Controllers\HomeController', 'contact']);
     $r->addRoute('POST', '/contact', ['App\Controllers\HomeController', 'submitContact']);
 
-    // Services
+    // ==================================================
+    // AUTHENTICATION
+    // ==================================================
+    $r->addRoute('GET',  '/login',  ['App\Controllers\AuthController', 'showLogin']);
+    $r->addRoute('POST', '/login',  ['App\Controllers\AuthController', 'login']);
+    $r->addRoute('POST', '/logout', ['App\Controllers\AuthController', 'logout']);
+    $r->addRoute('GET',  '/register',  ['App\Controllers\AuthController', 'showRegister']);
+    $r->addRoute('POST', '/register',  ['App\Controllers\AuthController', 'register']);
+
+    // ==================================================
+    // DATABASE & SYSTEM
+    // ==================================================
     $r->addRoute('GET', '/db/health', ['App\Controllers\DbController', 'health']);
 
+    // ==================================================
+    // PUBLIC-FACING RESOURCES (Browse Services & Hairdressers)
+    // ==================================================
+    // Services
     $r->addRoute('GET', '/services', ['App\Controllers\ServiceController', 'index']);
-
-// Auth
-$r->addRoute('GET',  '/login',  ['App\Controllers\AuthController', 'showLogin']);
-$r->addRoute('POST', '/login',  ['App\Controllers\AuthController', 'login']);
-$r->addRoute('POST', '/logout', ['App\Controllers\AuthController', 'logout']);
-
-
-//register
-$r->addRoute('GET',  '/register',  ['App\Controllers\AuthController', 'showRegister']);
-$r->addRoute('POST', '/register',  ['App\Controllers\AuthController', 'register']);
-
 
     // Hairdressers
     $r->addRoute('GET',  '/hairdressers',  ['App\Controllers\HairdresserController', 'index']);
     $r->addRoute('GET',  '/hairdressers/{id:\d+}', ['App\Controllers\HairdresserController', 'show']);
 
+    // ==================================================
+    // APPOINTMENTS (User Booking Flow)
+    // ==================================================
+    $r->addRoute('GET',  '/appointments',              ['App\Controllers\AppointmentController', 'index']);
+    $r->addRoute('GET',  '/appointments/new',          ['App\Controllers\AppointmentController', 'create']);
+    $r->addRoute('GET',  '/appointments/create',       ['App\Controllers\AppointmentController', 'create']); // Backwards compatibility
+    $r->addRoute('GET',  '/appointments/slots',        ['App\Controllers\AppointmentController', 'slots']);
+    $r->addRoute('POST', '/appointments/confirm',      ['App\Controllers\AppointmentController', 'confirm']);
+    $r->addRoute('POST', '/appointments/finalize',     ['App\Controllers\AppointmentController', 'finalize']);
+    $r->addRoute('GET',  '/appointments/{id:\d+}',     ['App\Controllers\AppointmentController', 'show']);
+    $r->addRoute('POST', '/appointments/{id:\d+}/cancel',   ['App\Controllers\AppointmentController', 'cancel']);
+    $r->addRoute('POST', '/appointments/{id:\d+}/complete', ['App\Controllers\AppointmentController', 'complete']);
 
-    // Appointments
-    $r->addRoute('GET',  '/appointments',        ['App\Controllers\AppointmentController', 'index']);
-    $r->addRoute('GET', '/appointments/new', ['App\Controllers\AppointmentController', 'create']);
-    $r->addRoute('GET', '/appointments/create', ['App\Controllers\AppointmentController', 'create']);
-    $r->addRoute('GET',  '/appointments/slots',  ['App\Controllers\AppointmentController', 'slots']);
-    $r->addRoute('POST', '/appointments/confirm', ['App\Controllers\AppointmentController', 'confirm']);
-    $r->addRoute('POST', '/appointments/finalize', ['App\Controllers\AppointmentController', 'finalize']);
-    $r->addRoute('GET', '/appointments/{id:\d+}', ['App\Controllers\AppointmentController', 'show']);
-    $r->addRoute('POST', '/appointments/{id:\d+}/cancel', ['App\Controllers\AppointmentController', 'cancel']);
+    // ==================================================
+    // ADMIN SECTION
+    // ==================================================
+    
+    // Admin - Services CRUD
+    $r->addRoute('GET',  '/admin/services',               ['App\Controllers\Admin\ServiceAdminController', 'index']);
+    $r->addRoute('GET',  '/admin/services/new',           ['App\Controllers\Admin\ServiceAdminController', 'create']);
+    $r->addRoute('POST', '/admin/services',               ['App\Controllers\Admin\ServiceAdminController', 'store']);
+    $r->addRoute('GET',  '/admin/services/{id:\d+}/edit', ['App\Controllers\Admin\ServiceAdminController', 'edit']);
+    $r->addRoute('POST', '/admin/services/{id:\d+}',      ['App\Controllers\Admin\ServiceAdminController', 'update']);
+    $r->addRoute('POST', '/admin/services/{id:\d+}/delete', ['App\Controllers\Admin\ServiceAdminController', 'delete']);
+
+    // Admin - Hairdressers CRUD
+    $r->addRoute('GET',  '/admin/hairdressers',                ['App\Controllers\Admin\HairdresserAdminController', 'index']);
+    $r->addRoute('GET',  '/admin/hairdressers/new',            ['App\Controllers\Admin\HairdresserAdminController', 'create']);
+    $r->addRoute('POST', '/admin/hairdressers',                ['App\Controllers\Admin\HairdresserAdminController', 'store']);
+    $r->addRoute('GET',  '/admin/hairdressers/{id:\d+}/edit',  ['App\Controllers\Admin\HairdresserAdminController', 'edit']);
+    $r->addRoute('POST', '/admin/hairdressers/{id:\d+}',       ['App\Controllers\Admin\HairdresserAdminController', 'update']);
+    $r->addRoute('POST', '/admin/hairdressers/{id:\d+}/delete', ['App\Controllers\Admin\HairdresserAdminController', 'delete']);
+
+    // Admin - Availability CRUD
+    $r->addRoute('GET',  '/admin/availability',               ['App\Controllers\Admin\AvailabilityAdminController', 'index']);
+    $r->addRoute('GET',  '/admin/availability/new',           ['App\Controllers\Admin\AvailabilityAdminController', 'create']);
+    $r->addRoute('POST', '/admin/availability',               ['App\Controllers\Admin\AvailabilityAdminController', 'store']);
+    $r->addRoute('GET',  '/admin/availability/{id:\d+}/edit', ['App\Controllers\Admin\AvailabilityAdminController', 'edit']);
+    $r->addRoute('POST', '/admin/availability/{id:\d+}',      ['App\Controllers\Admin\AvailabilityAdminController', 'update']);
+    $r->addRoute('POST', '/admin/availability/{id:\d+}/delete', ['App\Controllers\Admin\AvailabilityAdminController', 'delete']);
 });
 
 // --------------------------------------------------

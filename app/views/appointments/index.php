@@ -6,6 +6,17 @@
 
 $filter = isset($filter) && is_string($filter) ? strtolower($filter) : 'upcoming';
 
+$currentUser = $_SESSION['user'] ?? null;
+$isLoggedIn = is_array($currentUser);
+$isAdmin = $isLoggedIn && (($currentUser['role'] ?? '') === 'admin');
+$currentUserId = $isLoggedIn ? (int)($currentUser['id'] ?? 0) : 0;
+
+// Ensure CSRF token exists for inline forms (cancel/complete)
+if (empty($_SESSION['csrf_token']) || !is_string($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+$csrfToken = (string)$_SESSION['csrf_token'];
+
 function tabLink(string $value, string $label, string $active): string
 {
     $href = ($value === 'upcoming')
@@ -19,7 +30,7 @@ function tabLink(string $value, string $label, string $active): string
         '<a class="nav-link' . $isActive . '" href="' . htmlspecialchars($href, ENT_QUOTES, 'UTF-8') . '"' . $aria . '>' .
         htmlspecialchars($label, ENT_QUOTES, 'UTF-8') .
         '</a>' .
-    '</li>';
+        '</li>';
 }
 
 function statusBadge(string $status): string
@@ -51,13 +62,13 @@ function statusBadge(string $status): string
 
 <?php if (!empty($success)): ?>
     <div class="alert alert-success">
-        <?= htmlspecialchars($success, ENT_QUOTES, 'UTF-8') ?>
+        <?= htmlspecialchars((string)$success, ENT_QUOTES, 'UTF-8') ?>
     </div>
 <?php endif; ?>
 
 <?php if (!empty($error)): ?>
     <div class="alert alert-danger">
-        <?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?>
+        <?= htmlspecialchars((string)$error, ENT_QUOTES, 'UTF-8') ?>
     </div>
 <?php endif; ?>
 
@@ -81,46 +92,72 @@ function statusBadge(string $status): string
             <tbody>
             <?php foreach ($appointments as $a): ?>
                 <?php
-                $id = (int)$a['id'];
-                $status = (string)($a['status'] ?? '');
+                $id = (int)($a['id'] ?? 0);
+
+                $status = strtolower((string)($a['status'] ?? ''));
                 $isBooked = ($status === 'booked');
+
+                // Owner logic (requires repository to return user_id in allWithDetails)
+                $ownerId = (int)($a['user_id'] ?? 0);
+                $canManage = $isLoggedIn && ($isAdmin || $ownerId === $currentUserId);
+
+                // MATCH REPOSITORY KEYS:
+                $dur = (int)($a['duration_minutes'] ?? 0);
+                $price = (float)($a['price'] ?? 0);
                 ?>
                 <tr>
                     <td><?= $id ?></td>
-                    <td><?= htmlspecialchars((string)$a['appointment_date'], ENT_QUOTES, 'UTF-8') ?></td>
-                    <td><?= htmlspecialchars((string)$a['appointment_time'], ENT_QUOTES, 'UTF-8') ?></td>
-                    <td><?= htmlspecialchars((string)$a['hairdresser_name'], ENT_QUOTES, 'UTF-8') ?></td>
+                    <td><?= htmlspecialchars((string)($a['appointment_date'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                    <td><?= htmlspecialchars((string)($a['appointment_time'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                    <td><?= htmlspecialchars((string)($a['hairdresser_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+
                     <td>
-                        <?= htmlspecialchars((string)$a['service_name'], ENT_QUOTES, 'UTF-8') ?>
+                        <?= htmlspecialchars((string)($a['service_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
                         <span class="text-muted">
-                            (<?= (int)$a['service_duration_minutes'] ?> min,
-                            €<?= number_format((float)$a['service_price'], 2) ?>)
+                            (<?= $dur ?> min, €<?= number_format($price, 2) ?>)
                         </span>
                     </td>
+
                     <td>
-                        <?= htmlspecialchars((string)$a['user_email'], ENT_QUOTES, 'UTF-8') ?>
+                        <?= htmlspecialchars((string)($a['user_email'] ?? '—'), ENT_QUOTES, 'UTF-8') ?>
                         <?php if (!empty($a['user_role'])): ?>
                             <span class="text-muted">
                                 (<?= htmlspecialchars((string)$a['user_role'], ENT_QUOTES, 'UTF-8') ?>)
                             </span>
                         <?php endif; ?>
                     </td>
+
                     <td><?= statusBadge($status) ?></td>
+
                     <td class="text-nowrap">
                         <a class="btn btn-sm btn-outline-primary" href="/appointments/<?= $id ?>">View</a>
 
-                        <?php if ($isBooked): ?>
-                            <form method="post" action="/appointments/<?= $id ?>/cancel"
+                        <?php if ($isBooked && $canManage): ?>
+                            <?php if ($isAdmin): ?>
+                                <form method="POST"
+                                      action="/appointments/<?= $id ?>/complete"
+                                      class="d-inline"
+                                      onsubmit="return confirm('Mark this appointment as completed?');">
+                                    <input type="hidden" name="csrf_token"
+                                           value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
+                                    <button type="submit" class="btn btn-sm btn-outline-success">
+                                        Complete
+                                    </button>
+                                </form>
+                            <?php endif; ?>
+
+                            <form method="POST"
+                                  action="/appointments/<?= $id ?>/cancel"
                                   class="d-inline"
                                   onsubmit="return confirm('Cancel this appointment?');">
+                                <input type="hidden" name="csrf_token"
+                                       value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
                                 <button type="submit" class="btn btn-sm btn-outline-danger">
                                     Cancel
                                 </button>
                             </form>
                         <?php else: ?>
-                            <button class="btn btn-sm btn-outline-secondary" disabled>
-                                —
-                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" disabled>—</button>
                         <?php endif; ?>
                     </td>
                 </tr>
