@@ -101,36 +101,63 @@ app/database/init/
 They are executed automatically on first run.
 
 📁 Project Structure
+
 app/
+
 ├── public/
-│   ├── index.php            # Front controller
+
+│   ├── index.php  
+          # Front controller
 │   └── assets/
+
 │       └── js/
+
 │           └── app.js
+
 │
 ├── src/
+
 │   ├── Controllers/
+
 │   ├── Core/
+
 │   ├── Repositories/
+
 │   ├── Services/
+
 │
 ├── Views/
+
 │   ├── layouts/
+
 │   │   └── main.php
+
 │   ├── appointments/
+
 │   ├── admin/
+
 │   ├── hairdressers/
+
 │   └── home.php
+
 │
 ├── database/
+
 │   └── init/
+
 │       ├── 001_schema.sql
+
 │       └── 002_seed.sql
 │
+
 docker-compose.yml
+
 nginx.conf
+
 PHP.Dockerfile
+
 README.md
+
 
 🔐 Security Considerations
 

@@ -8,6 +8,20 @@ use App\Repositories\UserRepository;
 
 final class AuthController extends Controller
 {
+    public function showRegister(): string
+    {
+        // If already logged in, redirect to main flow
+        if ($this->currentUser() !== null) {
+            return $this->redirect('/appointments');
+        }
+
+        return $this->render('auth/register', [
+            'title' => 'Register',
+            'errors' => [],
+            'old' => ['email' => ''],
+        ]);
+    }
+
     public function showLogin(): string
     {
         // Optional: redirect already logged-in users away from login page
@@ -78,5 +92,54 @@ final class AuthController extends Controller
         unset($_SESSION['user']);
         $this->flash('success', 'Logged out.');
         return $this->redirect('/');
+    }
+
+    public function register(): string
+    {
+        $this->requireCsrf();
+
+        $email = trim((string)($_POST['email'] ?? ''));
+        $password = (string)($_POST['password'] ?? '');
+        $confirm  = (string)($_POST['password_confirm'] ?? '');
+
+        $errors = [];
+
+        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $errors[] = 'Enter a valid email address.';
+        }
+        if ($password === '') {
+            $errors[] = 'Password is required.';
+        } elseif (strlen($password) < 8) {
+            $errors[] = 'Password must be at least 8 characters.';
+        }
+        if ($confirm === '' || $confirm !== $password) {
+            $errors[] = 'Passwords do not match.';
+        }
+
+        $repo = new UserRepository();
+        if (!$errors && $repo->findByEmail($email) !== null) {
+            $errors[] = 'An account with this email already exists.';
+        }
+
+        if ($errors) {
+            http_response_code(422);
+            return $this->render('auth/register', [
+                'title' => 'Register',
+                'errors' => $errors,
+                'old' => ['email' => $email],
+            ]);
+        }
+
+        $hash = password_hash($password, PASSWORD_DEFAULT);
+        $userId = $repo->create($email, $hash, 'client');
+
+        $_SESSION['user'] = [
+            'id' => (int)$userId,
+            'email' => $email,
+            'role' => 'client',
+        ];
+
+        $this->flash('success', 'Account created. Welcome!');
+        return $this->redirect('/appointments');
     }
 }
