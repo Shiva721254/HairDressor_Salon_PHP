@@ -194,4 +194,29 @@ final class AvailabilityRepository
 
         return (bool)$stmt->fetchColumn();
     }
+/**
+ * Returns distinct working weekdays for a given hairdresser.
+ * Values follow PHP/JS convention: 0=Sunday ... 6=Saturday.
+ *
+ * @return array<int, int> Example: [1,2,3,4,5]
+ */
+public function workingDaysForHairdresser(int $hairdresserId): array
+{
+    $stmt = $this->pdo->prepare(
+        'SELECT DISTINCT day_of_week
+         FROM availability
+         WHERE hairdresser_id = :hid
+         ORDER BY day_of_week ASC'
+    );
+    $stmt->execute(['hid' => $hairdresserId]);
+
+    $rows = $stmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+    return array_map('intval', $rows);
+}
+
+
+
+
+
+
 }

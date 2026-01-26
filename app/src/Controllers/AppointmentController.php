@@ -8,7 +8,6 @@ use App\Core\Controller;
 use App\Repositories\AppointmentRepository;
 use App\Repositories\HairdresserRepository;
 use App\Repositories\ServiceRepository;
-use App\Repositories\AvailabilityRepository;
 
 final class AppointmentController extends Controller
 {
@@ -173,81 +172,57 @@ final class AppointmentController extends Controller
         return $this->redirect('/appointments');
     }
 
-    public function slots(): string
-    {
-        $hairdresserId = (int)($_GET['hairdresser_id'] ?? 0);
-        $serviceId     = (int)($_GET['service_id'] ?? 0);
-        $dateYmd       = trim((string)($_GET['date'] ?? ''));
+public function slots(): string
+{
+    header('Content-Type: application/json; charset=UTF-8');
 
-        $errors = [];
-        if ($hairdresserId <= 0) $errors[] = 'hairdresser_id required';
-        if ($serviceId <= 0) $errors[] = 'service_id required';
+    try {
+        $hairdresserId = filter_input(INPUT_GET, 'hairdresser_id', FILTER_VALIDATE_INT);
+        $serviceId     = filter_input(INPUT_GET, 'service_id', FILTER_VALIDATE_INT);
 
-        $dt = \DateTimeImmutable::createFromFormat('Y-m-d', $dateYmd);
-        if ($dt === false || $dt->format('Y-m-d') !== $dateYmd) $errors[] = 'valid date required (Y-m-d)';
+        $dateRaw = trim((string)($_GET['date'] ?? ''));
 
-        if ($errors) {
-            return $this->json(['ok' => false, 'errors' => $errors], 422);
+        if (!$hairdresserId || !$serviceId || $dateRaw === '') {
+            http_response_code(400);
+            return json_encode([
+                'ok' => false,
+                'error' => 'Missing or invalid parameters. Required: hairdresser_id, service_id, date (YYYY-MM-DD).',
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         }
 
-        $dayOfWeek = (int)$dt->format('N'); // 1..7
+        $dt = \DateTimeImmutable::createFromFormat('Y-m-d', $dateRaw);
+        $dateValid = $dt && $dt->format('Y-m-d') === $dateRaw;
 
-        $availRepo = new AvailabilityRepository();
-        $serviceRepo = new ServiceRepository();
-        $apptRepo = new AppointmentRepository();
-
-        $window = $availRepo->findWindowFor($hairdresserId, $dayOfWeek);
-        $service = $serviceRepo->findById($serviceId);
-
-        if ($window === null || $service === null) {
-            return $this->json(['ok' => true, 'slots' => []]);
+        if (!$dateValid) {
+            http_response_code(400);
+            return json_encode([
+                'ok' => false,
+                'error' => 'Invalid date format. Use YYYY-MM-DD.',
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         }
 
-        $duration = (int)($service['duration_minutes'] ?? 30);
-        if ($duration <= 0) $duration = 30;
+        $repo = new AppointmentRepository();
+        $slots = $repo->getAvailableSlots($hairdresserId, $serviceId, $dateRaw);
 
-        $stepMinutes = 15;
+        http_response_code(200);
+        return json_encode([
+            'ok' => true,
+            'hairdresser_id' => $hairdresserId,
+            'service_id' => $serviceId,
+            'date' => $dateRaw,
+            'slots' => $slots,
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
 
-        $start = \DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $dateYmd . ' ' . (string)$window['start_time']);
-        $end   = \DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $dateYmd . ' ' . (string)$window['end_time']);
-
-        if ($start === false || $end === false || $end <= $start) {
-            return $this->json(['ok' => true, 'slots' => []]);
-        }
-
-        $bookings = $apptRepo->bookingsForDate($hairdresserId, $dateYmd);
-
-        $slots = [];
-        $cursor = $start;
-        $latestStart = $end->modify("-{$duration} minutes");
-
-        while ($cursor <= $latestStart) {
-            $candidateStart = $cursor;
-            $candidateEnd = $candidateStart->modify("+{$duration} minutes");
-
-            $overlaps = false;
-            foreach ($bookings as $b) {
-                $bStart = \DateTimeImmutable::createFromFormat('Y-m-d H:i', $dateYmd . ' ' . (string)($b['start_time'] ?? ''));
-                if ($bStart === false) continue;
-
-                $bDur = max(1, (int)($b['duration_minutes'] ?? 0));
-                $bEnd = $bStart->modify("+{$bDur} minutes");
-
-                if ($candidateStart < $bEnd && $candidateEnd > $bStart) {
-                    $overlaps = true;
-                    break;
-                }
-            }
-
-            if (!$overlaps) {
-                $slots[] = $candidateStart->format('H:i');
-            }
-
-            $cursor = $cursor->modify("+{$stepMinutes} minutes");
-        }
-
-        return $this->json(['ok' => true, 'slots' => $slots]);
+    } catch (\JsonException $e) {
+        http_response_code(500);
+        return '{"ok":false,"error":"JSON encoding error"}';
+    } catch (\Throwable $e) {
+        http_response_code(500);
+        return '{"ok":false,"error":"Internal Server Error"}';
     }
+}
+
+
 
     public function cancel(string $id): string
     {

@@ -90,83 +90,81 @@ final class AppointmentRepository
         return (int)$this->pdo->lastInsertId();
     }
 
-
     /**
      * Get appointment list with joined details.
      * If $userId is provided, results are restricted to that user (client view).
      *
      * @return array<int, array<string, mixed>>
      */
-   public function allWithDetails(?string $filter = null, ?int $userId = null): array
-{
-    $filter = $filter ? strtolower(trim($filter)) : 'all';
+    public function allWithDetails(?string $filter = null, ?int $userId = null): array
+    {
+        $filter = $filter ? strtolower(trim($filter)) : 'all';
 
-    $whereParts = [];
-    $params = [];
-    $orderBy = "ORDER BY a.appointment_date ASC, a.appointment_time ASC, a.id ASC";
+        $whereParts = [];
+        $params = [];
+        $orderBy = "ORDER BY a.appointment_date ASC, a.appointment_time ASC, a.id ASC";
 
-    // Optional scope: only appointments of a specific user (client view)
-    if ($userId !== null) {
-        $whereParts[] = "a.user_id = :uid";
-        $params['uid'] = $userId;
+        // Optional scope: only appointments of a specific user (client view)
+        if ($userId !== null) {
+            $whereParts[] = "a.user_id = :uid";
+            $params['uid'] = $userId;
+        }
+
+        switch ($filter) {
+            case 'cancelled':
+                $whereParts[] = "a.status = :status";
+                $params['status'] = 'cancelled';
+                $orderBy = "ORDER BY a.appointment_date DESC, a.appointment_time DESC, a.id DESC";
+                break;
+
+            case 'completed':
+                $whereParts[] = "a.status = :status";
+                $params['status'] = 'completed';
+                $orderBy = "ORDER BY a.appointment_date DESC, a.appointment_time DESC, a.id DESC";
+                break;
+
+            case 'all':
+                // no extra filters
+                break;
+
+            case 'upcoming':
+            default:
+                $whereParts[] = "a.status = :status";
+                $params['status'] = 'booked';
+                $whereParts[] = "(a.appointment_date > CURDATE()
+                    OR (a.appointment_date = CURDATE() AND a.appointment_time >= CURTIME()))";
+                $orderBy = "ORDER BY a.appointment_date ASC, a.appointment_time ASC, a.id ASC";
+                break;
+        }
+
+        $where = $whereParts ? ('WHERE ' . implode(' AND ', $whereParts)) : '';
+
+        $sql = "
+            SELECT
+                a.id,
+                a.user_id,
+                a.appointment_date,
+                a.appointment_time,
+                a.status,
+                h.name AS hairdresser_name,
+                s.name AS service_name,
+                s.duration_minutes AS duration_minutes,
+                s.price AS price,
+                u.email AS user_email,
+                u.role AS user_role
+            FROM appointments a
+            JOIN hairdressers h ON h.id = a.hairdresser_id
+            JOIN services s ON s.id = a.service_id
+            JOIN users u ON u.id = a.user_id
+            $where
+            $orderBy
+        ";
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
     }
-
-    switch ($filter) {
-        case 'cancelled':
-            $whereParts[] = "a.status = :status";
-            $params['status'] = 'cancelled';
-            $orderBy = "ORDER BY a.appointment_date DESC, a.appointment_time DESC, a.id DESC";
-            break;
-
-        case 'completed':
-            $whereParts[] = "a.status = :status";
-            $params['status'] = 'completed';
-            $orderBy = "ORDER BY a.appointment_date DESC, a.appointment_time DESC, a.id DESC";
-            break;
-
-        case 'all':
-            // no extra filters
-            break;
-
-        case 'upcoming':
-        default:
-            $whereParts[] = "a.status = :status";
-            $params['status'] = 'booked';
-            $whereParts[] = "(a.appointment_date > CURDATE()
-                OR (a.appointment_date = CURDATE() AND a.appointment_time >= CURTIME()))";
-            $orderBy = "ORDER BY a.appointment_date ASC, a.appointment_time ASC, a.id ASC";
-            break;
-    }
-
-    $where = $whereParts ? ('WHERE ' . implode(' AND ', $whereParts)) : '';
-
-    $sql = "
-        SELECT
-            a.id,
-            a.user_id,
-            a.appointment_date,
-            a.appointment_time,
-            a.status,
-            h.name AS hairdresser_name,
-            s.name AS service_name,
-            s.duration_minutes AS duration_minutes,
-            s.price AS price,
-            u.email AS user_email,
-            u.role AS user_role
-        FROM appointments a
-        JOIN hairdressers h ON h.id = a.hairdresser_id
-        JOIN services s ON s.id = a.service_id
-        JOIN users u ON u.id = a.user_id
-        $where
-        $orderBy
-    ";
-
-    $stmt = $this->pdo->prepare($sql);
-    $stmt->execute($params);
-
-    return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-}
-
 
     public function findWithDetails(int $id): ?array
     {
@@ -207,24 +205,99 @@ final class AppointmentRepository
         return $stmt->rowCount() > 0;
     }
 
+    public function complete(int $id): bool
+    {
+        $stmt = $this->pdo->prepare(
+            "UPDATE appointments
+             SET status = 'completed'
+             WHERE id = :id AND status = 'booked'"
+        );
+        $stmt->execute(['id' => $id]);
 
-public function complete(int $id): bool
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Returns available time slots for a hairdresser on a given date, taking into account:
+     * - availability windows
+     * - service duration
+     * - already booked appointments (non-cancelled)
+     *
+     * @return array<int, string> Example: ["10:00","10:30","11:00"]
+     */
+  public function getAvailableSlots(int $hairdresserId, int $serviceId, string $dateYmd): array
 {
+    // 1) Get service duration
     $stmt = $this->pdo->prepare(
-        "UPDATE appointments
-         SET status = 'completed'
-         WHERE id = :id AND status = 'booked'"
+        'SELECT duration_minutes FROM services WHERE id = :sid LIMIT 1'
     );
-    $stmt->execute(['id' => $id]);
+    $stmt->execute(['sid' => $serviceId]);
+    $duration = (int)($stmt->fetchColumn() ?: 0);
 
-    return $stmt->rowCount() > 0;
+    if ($duration <= 0) {
+        return [];
+    }
+
+    // 2) Fetch availability windows for that hairdresser on the weekday of the given date
+    // Schema uses day_of_week (1=Mon ... 7=Sun)
+    $dateObj = new \DateTimeImmutable($dateYmd);
+    $dayOfWeekIso = (int)$dateObj->format('N'); // 1..7
+
+    // 3) Fetch weekly availability
+    $stmt = $this->pdo->prepare('
+        SELECT start_time, end_time
+        FROM availability
+        WHERE hairdresser_id = :hid
+          AND day_of_week = :dow
+        ORDER BY start_time ASC
+    ');
+    $stmt->execute(['hid' => $hairdresserId, 'dow' => $dayOfWeekIso]);
+    $windows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    if (!$windows) {
+        return [];
+    }
+
+    // 4) Existing bookings for the selected date
+    $bookings = $this->bookingsForDate($hairdresserId, $dateYmd);
+
+    // 5) Build slots
+    $stepMinutes = 30;
+    $slots = [];
+
+    foreach ($windows as $w) {
+        $start = new \DateTimeImmutable($dateYmd . ' ' . $w['start_time']);
+        $end   = new \DateTimeImmutable($dateYmd . ' ' . $w['end_time']);
+
+        for ($t = $start; $t < $end; $t = $t->modify("+{$stepMinutes} minutes")) {
+            $slotStart = $t;
+            $slotEnd   = $t->modify("+{$duration} minutes");
+
+            if ($slotEnd > $end) {
+                break;
+            }
+
+            $conflict = false;
+            foreach ($bookings as $b) {
+                $bStart = new \DateTimeImmutable($dateYmd . ' ' . $b['start_time']);
+                $bEnd   = $bStart->modify('+' . (int)$b['duration_minutes'] . ' minutes');
+
+                if ($slotStart < $bEnd && $slotEnd > $bStart) {
+                    $conflict = true;
+                    break;
+                }
+            }
+
+            if (!$conflict) {
+                $slots[] = $slotStart->format('H:i');
+            }
+        }
+    }
+
+    $slots = array_values(array_unique($slots));
+    sort($slots);
+
+    return $slots;
 }
-
-
-
-
-
-
-
 
 }

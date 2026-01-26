@@ -48,6 +48,8 @@ $dispatcher = simpleDispatcher(function (RouteCollector $r) {
     // Hairdressers
     $r->addRoute('GET',  '/hairdressers',  ['App\Controllers\HairdresserController', 'index']);
     $r->addRoute('GET',  '/hairdressers/{id:\d+}', ['App\Controllers\HairdresserController', 'show']);
+    $r->addRoute('GET', '/api/hairdressers/{id:\d+}/availability', ['App\Controllers\HairdresserController', 'availability']);
+
 
     // ==================================================
     // APPOINTMENTS (User Booking Flow)
@@ -62,10 +64,15 @@ $dispatcher = simpleDispatcher(function (RouteCollector $r) {
     $r->addRoute('POST', '/appointments/{id:\d+}/cancel',   ['App\Controllers\AppointmentController', 'cancel']);
     $r->addRoute('POST', '/appointments/{id:\d+}/complete', ['App\Controllers\AppointmentController', 'complete']);
 
+    $r->addRoute('GET', '/api/slots', ['App\Controllers\AppointmentController', 'slots']);
+
+
+
+
     // ==================================================
     // ADMIN SECTION
     // ==================================================
-    
+
     // Admin - Services CRUD
     $r->addRoute('GET',  '/admin/services',               ['App\Controllers\Admin\ServiceAdminController', 'index']);
     $r->addRoute('GET',  '/admin/services/new',           ['App\Controllers\Admin\ServiceAdminController', 'create']);
@@ -116,35 +123,45 @@ if ($uri !== '/' && str_ends_with($uri, '/')) {
 // --------------------------------------------------
 // Dispatch route
 // --------------------------------------------------
-$routeInfo = $dispatcher->dispatch($httpMethod, $uri);
+try {
+    $routeInfo = $dispatcher->dispatch($httpMethod, $uri);
 
-switch ($routeInfo[0]) {
-    case FastRoute\Dispatcher::NOT_FOUND:
-        http_response_code(404);
-        echo '404 - Page not found';
-        break;
+    switch ($routeInfo[0]) {
+        case FastRoute\Dispatcher::NOT_FOUND:
+            http_response_code(404);
+            echo '404 - Page not found';
+            break;
 
-    case FastRoute\Dispatcher::METHOD_NOT_ALLOWED:
-        http_response_code(405);
-        echo '405 - Method not allowed';
-        break;
+        case FastRoute\Dispatcher::METHOD_NOT_ALLOWED:
+            http_response_code(405);
+            echo '405 - Method not allowed';
+            break;
 
-    case FastRoute\Dispatcher::FOUND:
-        [$controllerClass, $method] = $routeInfo[1];
-        $vars = $routeInfo[2];
+        case FastRoute\Dispatcher::FOUND:
+            [$controllerClass, $method] = $routeInfo[1];
+            $vars = $routeInfo[2];
 
-        if (!class_exists($controllerClass)) {
-            throw new RuntimeException("Controller not found: $controllerClass");
-        }
+            if (!class_exists($controllerClass)) {
+                throw new RuntimeException("Controller not found: $controllerClass");
+            }
 
-        $controller = new $controllerClass();
+            $controller = new $controllerClass();
 
-        if (!method_exists($controller, $method)) {
-            throw new RuntimeException("Method not found: $method");
-        }
+            if (!method_exists($controller, $method)) {
+                throw new RuntimeException("Method not found: $method");
+            }
 
-        // Call controller method and output result
-        echo $controller->$method(...array_values($vars));
+            echo $controller->$method(...array_values($vars));
+            break;
+    }
+} catch (Throwable $e) {
+    http_response_code(500);
 
-        break;
+    // Default: do not leak error details
+    echo '500 - Internal Server Error';
+
+    // Dev-only diagnostics (optional)
+    if (($_ENV['APP_ENV'] ?? 'prod') === 'dev') {
+        echo '<pre>' . htmlspecialchars((string)$e, ENT_QUOTES, 'UTF-8') . '</pre>';
+    }
 }
