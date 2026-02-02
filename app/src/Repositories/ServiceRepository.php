@@ -19,7 +19,8 @@ final class ServiceRepository
     public function all(): array
     {
         $sql = "SELECT id, name, duration_minutes, price FROM services ORDER BY name";
-        $stmt = $this->pdo->query($sql);
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
     }
 

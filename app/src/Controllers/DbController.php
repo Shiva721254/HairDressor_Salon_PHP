@@ -14,7 +14,7 @@ final class DbController extends Controller
         $status = 'OK';
 
         try {
-            Db::pdo()->query('SELECT 1');
+            Db::pdo()->prepare('SELECT 1')->execute();
         } catch (PDOException $e) {
             $status = 'FAILED: ' . $e->getMessage();
         }

@@ -39,6 +39,10 @@
   </div>
 
   <button class="btn btn-primary" type="submit">Login</button>
+  <div class="mt-3 small">
+    Don’t have an account? <a href="/register">Create one</a>
+</div>
+
 
   <div class="form-text mt-2">
     Demo accounts: admin@salon.test / Admin123! and client@salon.test / Client123!

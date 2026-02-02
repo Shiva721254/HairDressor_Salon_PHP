@@ -73,7 +73,8 @@ final class AvailabilityRepository
             ORDER BY h.name ASC, a.day_of_week ASC, a.start_time ASC
         ";
 
-        $stmt = $this->pdo->query($sql);
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
     }
 

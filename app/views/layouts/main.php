@@ -51,7 +51,6 @@ $adminActive = isPathActive($currentPath, ['/admin']);
 
 <nav class="navbar navbar-expand-lg bg-body-tertiary border-bottom">
     <div class="container d-flex align-items-center">
-        <a class="navbar-brand" href="/">Salon</a>
 
         <div class="navbar-nav">
             <?= navLink('/', 'Home', $currentPath) ?>
@@ -59,7 +58,7 @@ $adminActive = isPathActive($currentPath, ['/admin']);
             <?= navLink('/services', 'Services', $currentPath) ?>
             <?= navLink('/appointments/new', 'Book', $currentPath) ?>
             <?= navLink('/appointments', 'Appointments', $currentPath) ?>
-            <?= navLink('/contact', 'Contact', $currentPath) ?>
+           
 
             <?php if ($isAdmin): ?>
                 <?php
@@ -103,7 +102,9 @@ $adminActive = isPathActive($currentPath, ['/admin']);
                     <button type="submit" class="btn btn-outline-secondary btn-sm">Logout</button>
                 </form>
             <?php else: ?>
+               <a href="/register" class="btn btn-outline-primary btn-sm">Register</a>
                 <a href="/login" class="btn btn-primary btn-sm">Login</a>
+
             <?php endif; ?>
         </div>
     </div>

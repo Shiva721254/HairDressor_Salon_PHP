@@ -21,9 +21,6 @@ $dispatcher = simpleDispatcher(function (RouteCollector $r) {
     // PUBLIC PAGES
     // ==================================================
     $r->addRoute('GET', '/', ['App\Controllers\HomeController', 'home']);
-    $r->addRoute('GET', '/hello/{name}', ['App\Controllers\HelloController', 'greet']);
-    $r->addRoute('GET', '/contact', ['App\Controllers\HomeController', 'contact']);
-    $r->addRoute('POST', '/contact', ['App\Controllers\HomeController', 'submitContact']);
 
     // ==================================================
     // AUTHENTICATION
@@ -65,8 +62,6 @@ $dispatcher = simpleDispatcher(function (RouteCollector $r) {
     $r->addRoute('POST', '/appointments/{id:\d+}/complete', ['App\Controllers\AppointmentController', 'complete']);
 
     $r->addRoute('GET', '/api/slots', ['App\Controllers\AppointmentController', 'slots']);
-
-
 
 
     // ==================================================

@@ -106,219 +106,98 @@ $minDate = date('Y-m-d');
 </form>
 
 <script>
-    (function() {
-        const hairEl = document.getElementById('hairdresser_id');
-        const serviceEl = document.getElementById('service_id');
-        const dateEl = document.getElementById('appointment_date');
-        const timeEl = document.getElementById('appointment_time');
-        const statusEl = document.getElementById('slots-status');
-        const continueBtn = document.getElementById('btn-continue');
+(() => {
+  const hairdresserEl = document.getElementById('hairdresser_id');
+  const serviceEl     = document.getElementById('service_id');
+  const dateEl        = document.getElementById('appointment_date');
+  const timeEl        = document.getElementById('appointment_time');
+  const statusEl      = document.getElementById('slots-status');
+  const continueBtn   = document.getElementById('btn-continue');
 
-        const previouslySelectedTime = <?= json_encode($oldTime, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+  if (!hairdresserEl || !serviceEl || !dateEl || !timeEl) return;
 
-        let lastRequestKey = null;
+  function setDisabled(message) {
+    timeEl.innerHTML = '';
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = message;
+    timeEl.appendChild(opt);
+    timeEl.disabled = true;
+    if (continueBtn) continueBtn.disabled = true;
+    if (statusEl) statusEl.textContent = '';
+  }
 
-        let workingDays = null; // e.g. [1,2,3,4,5]
+  function fillSlots(slots) {
+    timeEl.innerHTML = '';
 
-        async function loadWorkingDays() {
-            workingDays = null;
+    if (!Array.isArray(slots) || slots.length === 0) {
+      setDisabled('No available times for this date');
+      if (statusEl) statusEl.textContent = 'No available times found.';
+      return;
+    }
 
-            const hid = hairEl.value;
-            if (!hid) return;
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = '-- Select time --';
+    timeEl.appendChild(placeholder);
 
-            try {
-                const res = await fetch(`/api/hairdressers/${encodeURIComponent(hid)}/availability`, {
-                    headers: {
-                        'Accept': 'application/json'
-                    }
-                });
+    for (const t of slots) {
+      const opt = document.createElement('option');
+      opt.value = t;
+      opt.textContent = t;
+      timeEl.appendChild(opt);
+    }
 
-                if (!res.ok) return;
+    timeEl.disabled = false;
+    if (statusEl) statusEl.textContent = `Found ${slots.length} available time slots.`;
+  }
 
-                const data = await res.json();
-                if (data && data.ok === true && Array.isArray(data.working_days)) {
-                    workingDays = data.working_days;
-                }
-            } catch (e) {
-                // ignore (workingDays stays null)
-            }
-        }
+  async function loadSlots() {
+    const hairdresserId = hairdresserEl.value;
+    const serviceId = serviceEl.value;
+    const date = dateEl.value; // YYYY-MM-DD
 
-        function isDateAllowed(dateStr) {
-            if (!dateStr) return true;
-            if (!workingDays || workingDays.length === 0) return true; // unknown -> do not block
+    if (!hairdresserId || !serviceId || !date) {
+      setDisabled('-- Select hairdresser, service and date first --');
+      return;
+    }
 
-            const d = new Date(dateStr + 'T00:00:00');
-            const dow = d.getDay(); // 0..6 (Sun..Sat)
-            return workingDays.includes(dow);
-        }
+    setDisabled('Loading available times...');
+    if (statusEl) statusEl.textContent = 'Loading...';
 
-        function humanWorkingDays(days) {
-            const map = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-            return (days || []).map(d => map[d] ?? String(d)).join(', ');
-        }
+    const url = `/api/slots?hairdresser_id=${encodeURIComponent(hairdresserId)}&service_id=${encodeURIComponent(serviceId)}&date=${encodeURIComponent(date)}`;
 
-        function enforceWorkingDaySelection() {
-            const value = dateEl.value;
-            if (!value) return;
+    try {
+      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
 
-            // Only enforce if workingDays is known
-            if (!Array.isArray(workingDays) || workingDays.length === 0) return;
+      if (!res.ok) {
+        setDisabled(`Error loading times (${res.status})`);
+        if (statusEl) statusEl.textContent = `Failed to load slots (${res.status}).`;
+        return;
+      }
 
-            const d = new Date(value + 'T00:00:00');
-            const dow = d.getDay(); // 0..6
+      const data = await res.json();
+      const slots = (data && Array.isArray(data.slots)) ? data.slots : [];
 
-            if (!workingDays.includes(dow)) {
-                // Reset invalid date selection
-                dateEl.value = '';
-                setTimeDisabled('No times available');
-                setStatus(`This hairdresser works on: ${humanWorkingDays(workingDays)}.`);
-            }
-        }
+      fillSlots(slots);
+    } catch (e) {
+      setDisabled('Network error loading times');
+      if (statusEl) statusEl.textContent = 'Network error.';
+    }
+  }
 
+  function onTimeChange() {
+    const hasTime = !!timeEl.value;
+    if (continueBtn) continueBtn.disabled = !hasTime;
+  }
 
+  hairdresserEl.addEventListener('change', loadSlots);
+  serviceEl.addEventListener('change', loadSlots);
+  dateEl.addEventListener('change', loadSlots);
+  timeEl.addEventListener('change', onTimeChange);
 
-
-
-        function setStatus(msg) {
-            statusEl.textContent = msg || '';
-        }
-
-        function setTimeDisabled(message) {
-            timeEl.innerHTML = '';
-            const opt = document.createElement('option');
-            opt.value = '';
-            opt.textContent = message;
-            timeEl.appendChild(opt);
-            timeEl.disabled = true;
-            continueBtn.disabled = true;
-        }
-
-        function setTimeOptions(slots) {
-            timeEl.innerHTML = '';
-
-            const placeholder = document.createElement('option');
-            placeholder.value = '';
-            placeholder.textContent = '-- Select a time --';
-            timeEl.appendChild(placeholder);
-
-            for (const t of slots) {
-                const opt = document.createElement('option');
-                opt.value = t;
-                opt.textContent = t;
-
-                if (previouslySelectedTime && t === previouslySelectedTime) {
-                    opt.selected = true;
-                }
-
-                timeEl.appendChild(opt);
-            }
-
-            timeEl.disabled = false;
-
-            // Enable Continue only if a valid time is selected
-            continueBtn.disabled = !timeEl.value;
-        }
-
-        function canQuerySlots() {
-            return Boolean(hairEl.value && serviceEl.value && dateEl.value);
-        }
-
-        async function loadSlots() {
-            if (!canQuerySlots()) {
-                setTimeDisabled('-- Select hairdresser, service and date first --');
-                setStatus('');
-                return;
-            }
-            // Block dates outside working days
-            // Block dates outside working days (only if we actually loaded workingDays)
-            if (dateEl.value && Array.isArray(workingDays) && workingDays.length > 0 && !isDateAllowed(dateEl.value)) {
-                setTimeDisabled('No times available');
-                setStatus(`This hairdresser works on: ${humanWorkingDays(workingDays)}.`);
-                return;
-            }
-
-
-
-            const hid = hairEl.value;
-            const sid = serviceEl.value;
-            const d = dateEl.value;
-
-            const requestKey = `${hid}|${sid}|${d}`;
-            lastRequestKey = requestKey;
-
-            setTimeDisabled('Loading available times...');
-            setStatus('Loading available time slots...');
-
-            const params = new URLSearchParams({
-                hairdresser_id: hid,
-                service_id: sid,
-                date: d
-            });
-
-            try {
-                // Preferred API route:
-                const url = `/api/slots?${params.toString()}`;
-
-                // If you did NOT add /api/slots route, use this instead:
-                // const url = `/appointments/slots?${params.toString()}`;
-
-                const res = await fetch(url, {
-                    headers: {
-                        'Accept': 'application/json'
-                    }
-                });
-
-                if (lastRequestKey !== requestKey) return;
-
-                if (!res.ok) {
-                    setTimeDisabled('No times available');
-                    setStatus(`Could not load slots (HTTP ${res.status}).`);
-                    return;
-                }
-
-                const data = await res.json();
-
-                if (!data || data.ok !== true || !Array.isArray(data.slots)) {
-                    setTimeDisabled('No times available');
-                    setStatus('No valid slot data returned.');
-                    return;
-                }
-
-                if (data.slots.length === 0) {
-                    setTimeDisabled('No times available');
-                    setStatus('No available slots for this selection.');
-                    return;
-                }
-
-                setTimeOptions(data.slots);
-                setStatus(`${data.slots.length} slot(s) available.`);
-            } catch (e) {
-                if (lastRequestKey !== requestKey) return;
-                setTimeDisabled('No times available');
-                setStatus('Network error while loading slots.');
-            }
-        }
-
-        hairEl.addEventListener('change', function() {
-            // When hairdresser changes, refresh working days first, then load slots
-            loadWorkingDays().then(loadSlots);
-        });
-
-        serviceEl.addEventListener('change', loadSlots);
-        dateEl.addEventListener('change', function() {
-            enforceWorkingDaySelection();
-            loadSlots();
-        });
-
-
-
-        timeEl.addEventListener('change', function() {
-            continueBtn.disabled = !timeEl.value;
-        });
-
-        // Initial load (supports “old values” after validation errors)
-        loadWorkingDays().then(loadSlots);
-
-    })();
+  // initial state
+  setDisabled('-- Select hairdresser, service and date first --');
+})();
 </script>
+
