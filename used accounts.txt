@@ -1,0 +1,1 @@
+Demo accounts: admin@salon.test / Admin123! and client@salon.test / Client123!
