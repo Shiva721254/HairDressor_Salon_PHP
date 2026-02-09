@@ -54,6 +54,12 @@ Controllers never contain raw SQL
 
 Clear separation of concerns
 
+Reference files:
+- Routing entry point: `app/public/index.php`
+- Controllers: `app/src/Controllers/*`
+- Repositories (data access): `app/src/Repositories/*`
+- Views & layout: `app/views/*` and `app/views/layouts/main.php`
+
 🐳 Docker Setup
 
 The application runs fully inside Docker containers.
@@ -99,6 +105,9 @@ Password: secret123
 📌 Database initialization scripts are located in:
 app/database/init/
 They are executed automatically on first run.
+
+If your database already exists, run the GDPR migration manually:
+- `app/database/init/003_gdpr_requests.sql`
 
 📁 Project Structure
 
@@ -179,6 +188,14 @@ CSRF protection implemented for all state-changing POST forms
 
 Passwords hashed using password_hash() and verified with password_verify()
 
+Reference files:
+- Session + auth checks: `app/src/Core/Controller.php`, `app/src/Controllers/AuthController.php`
+- Profile update: `app/src/Controllers/ProfileController.php` and `app/views/auth/profile.php`
+- Password hashing/verification: `app/src/Controllers/AuthController.php`
+- Prepared statements: `app/src/Repositories/*`
+- CSRF helpers: `app/src/Core/Controller.php` and POST forms in `app/views/*`
+- Output escaping: `app/views/*`
+
 🔌 API Endpoints (JSON)
 
 The application exposes JSON API endpoints used by JavaScript.
@@ -190,6 +207,10 @@ Returns available appointment time slots in JSON format
 
 GET /api/hairdressers/{id}/availability
 Returns weekly working days for a hairdresser (0–6)
+
+Reference files:
+- Routes: `app/public/index.php`
+- JSON responses: `app/src/Controllers/AppointmentController.php` and `app/src/Controllers/HairdresserController.php`
 
 These endpoints are consumed asynchronously using fetch() and update the UI without page reloads.
 
@@ -207,6 +228,9 @@ API responses are processed as JSON
 
 UI feedback is shown immediately for errors or availability
 
+Reference files:
+- Slot loading (fetch + JSON): `app/views/appointments/create.php` and `app/public/assets/js/app.js`
+
 🎨 CSS & UI
 
 Bootstrap 5 is used as the CSS framework
@@ -218,6 +242,10 @@ Consistent styling via layout templates
 Visual feedback via hover and focus states
 
 Basic UI transitions improve usability
+
+Reference files:
+- Bootstrap + layout: `app/views/layouts/main.php`
+- Custom transitions: `app/public/assets/css/app.css`
 
 ♿ Accessibility (WCAG)
 
@@ -235,6 +263,11 @@ Dynamic updates use aria-live to notify screen readers
 
 Clear error and success feedback messages
 
+Reference files:
+- Semantic layout + skip link: `app/views/layouts/main.php`
+- Labeled form fields + aria-live updates: `app/views/appointments/create.php`
+- Flash messages & alerts: `app/views/layouts/main.php`
+
 📜 GDPR Considerations
 
 The application respects GDPR principles:
@@ -251,6 +284,13 @@ Data can be extended to support deletion upon user request
 
 Database access is restricted and secured
 
+Reference files:
+- Data minimization schema: `app/database/init/001_schema.sql`
+- Session usage: `app/public/index.php` and `app/src/Core/Controller.php`
+- GDPR requests + export: `app/src/Controllers/ProfileController.php`, `app/src/Repositories/GdprRequestRepository.php`, `app/views/auth/profile.php`
+- GDPR admin review: `app/src/Controllers/Admin/GdprAdminController.php` and `app/views/admin/gdpr/index.php`
+- GDPR request status processing: `app/src/Repositories/GdprRequestRepository.php`
+
 🚀 Current Status
 
 ✅ Docker setup complete
@@ -260,6 +300,11 @@ Database access is restricted and secured
 ✅ Hairdresser availability management
 ✅ Appointment booking with availability checks
 ✅ Admin CRUD management
+✅ User profile update (email/password)
+✅ Admin appointment filters (hairdresser/date)
+✅ GDPR data export + deletion request flow
+✅ GDPR admin requests page
+✅ GDPR request status tracking (pending/processed)
 ✅ JSON API endpoints
 ✅ JavaScript-driven dynamic UI
 ✅ Security & accessibility considerations applied

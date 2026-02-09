@@ -1,0 +1,50 @@
+/* Custom styles to complement Bootstrap and improve polish */
+:root {
+  color-scheme: light;
+}
+
+body {
+  background-color: #f8f9fa;
+}
+
+.card,
+.navbar,
+.table,
+.alert,
+.btn,
+.form-control,
+.form-select {
+  transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.08);
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+.btn:focus-visible,
+.form-control:focus-visible,
+.form-select:focus-visible {
+  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+.table tbody tr:hover {
+  background-color: rgba(13, 110, 253, 0.04);
+}
+
+.visually-hidden-focusable:focus {
+  position: static !important;
+  width: auto;
+  height: auto;
+  margin: 0.5rem;
+  clip: auto;
+  clip-path: none;
+  background: #fff;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}

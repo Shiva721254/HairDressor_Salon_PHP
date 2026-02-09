@@ -42,3 +42,12 @@ CREATE TABLE appointments (
     FOREIGN KEY (hairdresser_id) REFERENCES hairdressers(id),
     FOREIGN KEY (service_id) REFERENCES services(id)
 );
+
+CREATE TABLE gdpr_requests (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    type ENUM('export','deletion') NOT NULL,
+    status ENUM('pending','processed') NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);

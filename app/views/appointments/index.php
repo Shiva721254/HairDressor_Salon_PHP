@@ -3,6 +3,8 @@
 /** @var ?string $success */
 /** @var ?string $error */
 /** @var string|null $filter */
+/** @var array<int, array{id:int,name:string}> $hairdressers */
+/** @var array{hairdresser_id:?int,date_from:?string,date_to:?string} $adminFilters */
 
 $filter = isset($filter) && is_string($filter) ? strtolower($filter) : 'upcoming';
 
@@ -10,6 +12,12 @@ $currentUser = $_SESSION['user'] ?? null;
 $isLoggedIn = is_array($currentUser);
 $isAdmin = $isLoggedIn && (($currentUser['role'] ?? '') === 'admin');
 $currentUserId = $isLoggedIn ? (int)($currentUser['id'] ?? 0) : 0;
+
+$adminFilters = isset($adminFilters) && is_array($adminFilters) ? $adminFilters : [
+    'hairdresser_id' => null,
+    'date_from' => null,
+    'date_to' => null,
+];
 
 // Ensure CSRF token exists for inline forms (cancel/complete)
 if (empty($_SESSION['csrf_token']) || !is_string($_SESSION['csrf_token'])) {
@@ -59,6 +67,65 @@ function statusBadge(string $status): string
     <?= tabLink('cancelled', 'Cancelled', $filter) ?>
     <?= tabLink('completed', 'Completed', $filter) ?>
 </ul>
+
+<?php if ($isAdmin): ?>
+    <?php
+    $today = (new \DateTimeImmutable('today'))->format('Y-m-d');
+    $weekStart = (new \DateTimeImmutable('monday this week'))->format('Y-m-d');
+    $weekEnd = (new \DateTimeImmutable('sunday this week'))->format('Y-m-d');
+
+    $filterParam = urlencode((string)$filter);
+    $todayLink = '/appointments?filter=' . $filterParam . '&date_from=' . $today . '&date_to=' . $today;
+    $weekLink = '/appointments?filter=' . $filterParam . '&date_from=' . $weekStart . '&date_to=' . $weekEnd;
+    ?>
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        <a class="btn btn-outline-primary btn-sm" href="<?= htmlspecialchars($todayLink, ENT_QUOTES, 'UTF-8') ?>">Today</a>
+        <a class="btn btn-outline-primary btn-sm" href="<?= htmlspecialchars($weekLink, ENT_QUOTES, 'UTF-8') ?>">This week</a>
+    </div>
+
+    <form method="GET" action="/appointments" class="card p-3 mb-3">
+        <input type="hidden" name="filter" value="<?= htmlspecialchars((string)$filter, ENT_QUOTES, 'UTF-8') ?>">
+        <div class="row g-3">
+            <div class="col-12 col-md-4">
+                <label class="form-label" for="filter_hairdresser">Hairdresser</label>
+                <select class="form-select" id="filter_hairdresser" name="hairdresser_id">
+                    <option value="">All hairdressers</option>
+                    <?php foreach (($hairdressers ?? []) as $h): ?>
+                        <?php $hid = (int)($h['id'] ?? 0); ?>
+                        <option value="<?= $hid ?>" <?= ($adminFilters['hairdresser_id'] ?? null) === $hid ? 'selected' : '' ?>>
+                            <?= htmlspecialchars((string)($h['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <div class="col-12 col-md-3">
+                <label class="form-label" for="filter_date_from">From</label>
+                <input
+                    class="form-control"
+                    id="filter_date_from"
+                    name="date_from"
+                    type="date"
+                    value="<?= htmlspecialchars((string)($adminFilters['date_from'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+            </div>
+
+            <div class="col-12 col-md-3">
+                <label class="form-label" for="filter_date_to">To</label>
+                <input
+                    class="form-control"
+                    id="filter_date_to"
+                    name="date_to"
+                    type="date"
+                    value="<?= htmlspecialchars((string)($adminFilters['date_to'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+            </div>
+
+            <div class="col-12 col-md-2 d-flex align-items-end gap-2">
+                <button class="btn btn-primary w-100" type="submit">Apply</button>
+                <a class="btn btn-outline-secondary w-100" href="/appointments?filter=<?= htmlspecialchars((string)$filter, ENT_QUOTES, 'UTF-8') ?>">Reset</a>
+            </div>
+        </div>
+    </form>
+<?php endif; ?>
 
 <?php if (!empty($success)): ?>
     <div class="alert alert-success">

@@ -96,7 +96,13 @@ final class AppointmentRepository
      *
      * @return array<int, array<string, mixed>>
      */
-    public function allWithDetails(?string $filter = null, ?int $userId = null): array
+    public function allWithDetails(
+        ?string $filter = null,
+        ?int $userId = null,
+        ?int $hairdresserId = null,
+        ?string $dateFrom = null,
+        ?string $dateTo = null
+    ): array
     {
         $filter = $filter ? strtolower(trim($filter)) : 'all';
 
@@ -108,6 +114,21 @@ final class AppointmentRepository
         if ($userId !== null) {
             $whereParts[] = "a.user_id = :uid";
             $params['uid'] = $userId;
+        }
+
+        if ($hairdresserId !== null) {
+            $whereParts[] = "a.hairdresser_id = :hid";
+            $params['hid'] = $hairdresserId;
+        }
+
+        if ($dateFrom !== null) {
+            $whereParts[] = "a.appointment_date >= :date_from";
+            $params['date_from'] = $dateFrom;
+        }
+
+        if ($dateTo !== null) {
+            $whereParts[] = "a.appointment_date <= :date_to";
+            $params['date_to'] = $dateTo;
         }
 
         switch ($filter) {

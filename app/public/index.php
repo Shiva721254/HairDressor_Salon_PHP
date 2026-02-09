@@ -30,6 +30,10 @@ $dispatcher = simpleDispatcher(function (RouteCollector $r) {
     $r->addRoute('POST', '/logout', ['App\Controllers\AuthController', 'logout']);
     $r->addRoute('GET',  '/register',  ['App\Controllers\AuthController', 'showRegister']);
     $r->addRoute('POST', '/register',  ['App\Controllers\AuthController', 'register']);
+    $r->addRoute('GET',  '/profile',   ['App\Controllers\ProfileController', 'show']);
+    $r->addRoute('POST', '/profile',   ['App\Controllers\ProfileController', 'update']);
+    $r->addRoute('GET',  '/profile/export', ['App\Controllers\ProfileController', 'export']);
+    $r->addRoute('POST', '/profile/delete', ['App\Controllers\ProfileController', 'requestDeletion']);
 
     // ==================================================
     // DATABASE & SYSTEM
@@ -91,6 +95,10 @@ $dispatcher = simpleDispatcher(function (RouteCollector $r) {
     $r->addRoute('GET',  '/admin/availability/{id:\d+}/edit', ['App\Controllers\Admin\AvailabilityAdminController', 'edit']);
     $r->addRoute('POST', '/admin/availability/{id:\d+}',      ['App\Controllers\Admin\AvailabilityAdminController', 'update']);
     $r->addRoute('POST', '/admin/availability/{id:\d+}/delete', ['App\Controllers\Admin\AvailabilityAdminController', 'delete']);
+
+    // Admin - GDPR Requests
+    $r->addRoute('GET', '/admin/gdpr-requests', ['App\Controllers\Admin\GdprAdminController', 'index']);
+    $r->addRoute('POST', '/admin/gdpr-requests/{id:\d+}/process', ['App\Controllers\Admin\GdprAdminController', 'process']);
 });
 
 // --------------------------------------------------

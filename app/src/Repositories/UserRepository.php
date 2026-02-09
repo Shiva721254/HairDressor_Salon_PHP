@@ -33,6 +33,15 @@ final class UserRepository
         return $row ?: null;
     }
 
+    public function findAuthById(int $id): ?array
+    {
+        $stmt = $this->pdo->prepare('SELECT id, email, password_hash, role FROM users WHERE id = :id LIMIT 1');
+        $stmt->execute(['id' => $id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        return $row ?: null;
+    }
+
     public function create(string $email, string $passwordHash, string $role = 'client'): int
     {
         $stmt = $this->pdo->prepare(
@@ -45,5 +54,21 @@ final class UserRepository
         ]);
 
         return (int)$this->pdo->lastInsertId();
+    }
+
+    public function updateEmail(int $id, string $email): bool
+    {
+        $stmt = $this->pdo->prepare('UPDATE users SET email = :email WHERE id = :id');
+        $stmt->execute(['email' => $email, 'id' => $id]);
+
+        return $stmt->rowCount() > 0;
+    }
+
+    public function updatePassword(int $id, string $hash): bool
+    {
+        $stmt = $this->pdo->prepare('UPDATE users SET password_hash = :hash WHERE id = :id');
+        $stmt->execute(['hash' => $hash, 'id' => $id]);
+
+        return $stmt->rowCount() > 0;
     }
 }

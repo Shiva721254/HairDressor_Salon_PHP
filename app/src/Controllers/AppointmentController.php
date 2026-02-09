@@ -19,16 +19,55 @@ final class AppointmentController extends Controller
         $filter = $_GET['filter'] ?? 'upcoming';
         $filter = is_string($filter) ? strtolower($filter) : 'upcoming';
 
+        $hairdresserId = null;
+        $dateFrom = null;
+        $dateTo = null;
+
+        if ($isAdmin) {
+            $hairdresserId = filter_input(INPUT_GET, 'hairdresser_id', FILTER_VALIDATE_INT) ?: null;
+
+            $dateFromRaw = trim((string)($_GET['date_from'] ?? ''));
+            $dateToRaw = trim((string)($_GET['date_to'] ?? ''));
+
+            if ($dateFromRaw !== '') {
+                $dtFrom = \DateTimeImmutable::createFromFormat('Y-m-d', $dateFromRaw);
+                if ($dtFrom && $dtFrom->format('Y-m-d') === $dateFromRaw) {
+                    $dateFrom = $dateFromRaw;
+                }
+            }
+
+            if ($dateToRaw !== '') {
+                $dtTo = \DateTimeImmutable::createFromFormat('Y-m-d', $dateToRaw);
+                if ($dtTo && $dtTo->format('Y-m-d') === $dateToRaw) {
+                    $dateTo = $dateToRaw;
+                }
+            }
+        }
+
         $repo = new AppointmentRepository();
         $appointments = $repo->allWithDetails(
             $filter,
-            $isAdmin ? null : (int)($user['id'] ?? 0)
+            $isAdmin ? null : (int)($user['id'] ?? 0),
+            $isAdmin ? $hairdresserId : null,
+            $isAdmin ? $dateFrom : null,
+            $isAdmin ? $dateTo : null
         );
+
+        $hairdressers = [];
+        if ($isAdmin) {
+            $hairdressers = (new HairdresserRepository())->all();
+        }
 
         return $this->render('appointments/index', [
             'title' => 'Appointments',
             'appointments' => $appointments,
             'filter' => $filter,
+            'hairdressers' => $hairdressers,
+            'adminFilters' => [
+                'hairdresser_id' => $hairdresserId,
+                'date_from' => $dateFrom,
+                'date_to' => $dateTo,
+            ],
             'success' => $this->flash('success'),
             'error' => $this->flash('error'),
         ]);

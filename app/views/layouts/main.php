@@ -44,6 +44,7 @@ $adminActive = isPathActive($currentPath, ['/admin']);
     <title><?= htmlspecialchars($title ?? 'Salon App', ENT_QUOTES, 'UTF-8') ?></title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/assets/css/app.css" rel="stylesheet">
 </head>
 <body>
 
@@ -84,6 +85,9 @@ $adminActive = isPathActive($currentPath, ['/admin']);
                         <li>
                             <a class="dropdown-item" href="/admin/availability">Manage Availability</a>
                         </li>
+                        <li>
+                            <a class="dropdown-item" href="/admin/gdpr-requests">GDPR Requests</a>
+                        </li>
                     </ul>
                 </div>
             <?php endif; ?>
@@ -92,6 +96,7 @@ $adminActive = isPathActive($currentPath, ['/admin']);
         <!-- RIGHT SIDE: AUTH -->
         <div class="ms-auto d-flex align-items-center gap-2">
             <?php if ($isLoggedIn): ?>
+                <a href="/profile" class="btn btn-outline-secondary btn-sm">Profile</a>
                 <span class="small text-muted">
                     <?= htmlspecialchars((string)($user['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
                     (<?= htmlspecialchars((string)($user['role'] ?? ''), ENT_QUOTES, 'UTF-8') ?>)
