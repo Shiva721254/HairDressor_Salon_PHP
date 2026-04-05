@@ -9,7 +9,7 @@ $oldServiceId     = (int)($_POST['service_id'] ?? 0);
 $oldDate          = (string)($_POST['appointment_date'] ?? '');
 $oldTime          = (string)($_POST['appointment_time'] ?? '');
 
-// Use ONE CSRF approach. Prefer your helper if it exists.
+// CSRF token
 $csrfFieldHtml = '';
 if (isset($this) && method_exists($this, 'csrfField')) {
     $csrfFieldHtml = (string)$this->csrfField();
@@ -155,7 +155,7 @@ $minDate = date('Y-m-d');
   async function loadSlots() {
     const hairdresserId = hairdresserEl.value;
     const serviceId = serviceEl.value;
-    const date = dateEl.value; // YYYY-MM-DD
+        const date = dateEl.value; // date format
 
     if (!hairdresserId || !serviceId || !date) {
       setDisabled('-- Select hairdresser, service and date first --');
@@ -196,7 +196,7 @@ $minDate = date('Y-m-d');
   dateEl.addEventListener('change', loadSlots);
   timeEl.addEventListener('change', onTimeChange);
 
-  // initial state
+    // start state
   setDisabled('-- Select hairdresser, service and date first --');
 })();
 </script>

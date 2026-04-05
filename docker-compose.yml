@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   nginx:
     image: nginx:latest
@@ -19,7 +17,6 @@ services:
     volumes:
       - ./app:/app
       - /app/vendor
-      - ./views:/views
     environment:
       DB_HOST: mysql
       DB_PORT: 3306
@@ -38,7 +35,14 @@ services:
       MYSQL_DATABASE: developmentdb
     volumes:
       - mysqldata:/var/lib/mysql
-      - ./app/database/init:/docker-entrypoint-initdb.d:ro
+      # Mount SQL files directly so MariaDB entrypoint executes them in order.
+      - ./app/database/migrations/001_initial_schema.sql:/docker-entrypoint-initdb.d/001_initial_schema.sql:ro
+      - ./app/database/migrations/002_add_roles_data.sql:/docker-entrypoint-initdb.d/002_add_roles_data.sql:ro
+      - ./app/database/migrations/003_link_users_to_hairdressers.sql:/docker-entrypoint-initdb.d/003_link_users_to_hairdressers.sql:ro
+      - ./app/database/migrations/004_normalize_availability_times.sql:/docker-entrypoint-initdb.d/004_normalize_availability_times.sql:ro
+      - ./app/database/seeds/001_hairdressers_and_services.sql:/docker-entrypoint-initdb.d/101_hairdressers_and_services.sql:ro
+      - ./app/database/seeds/002_demo_users.sql:/docker-entrypoint-initdb.d/102_demo_users.sql:ro
+      - ./app/database/seeds/003_demo_availability.sql:/docker-entrypoint-initdb.d/103_demo_availability.sql:ro
     ports:
       - "3306:3306"
 

@@ -40,7 +40,7 @@
 
       const data = await response.json();
 
-      // ✅ IMPORTANT: your API returns { slots: [...] }
+      // API gives slots
       const slots = data.slots;
 
       timeEl.innerHTML = '';
@@ -139,9 +139,7 @@
   rebuildEndOptions();
 })();
 
-/* ========================================
-   CUSTOM DROPDOWN FOR DURATION
-   ======================================== */
+/* Duration dropdown */
 
 (() => {
   const durationBtn = document.getElementById('durationBtn');
@@ -151,7 +149,7 @@
   
   if (!durationBtn || !durationMenu || !durationInput) return;
 
-  // Initialize label with current value
+  // set label
   function updateLabel() {
     const items = durationMenu.querySelectorAll('.custom-dropdown-item[data-value]');
     items.forEach(item => item.classList.remove('active'));
@@ -168,14 +166,14 @@
     }
   }
 
-  // Toggle menu on button click
+  // open/close menu
   durationBtn.addEventListener('click', (e) => {
     e.preventDefault();
     durationBtn.classList.toggle('active');
     durationMenu.classList.toggle('show');
   });
 
-  // Select item
+  // pick item
   durationMenu.querySelectorAll('.custom-dropdown-item[data-value]').forEach(item => {
     item.addEventListener('click', () => {
       const value = item.dataset.value;
@@ -186,7 +184,7 @@
     });
   });
 
-  // Close on outside click
+  // close if outside
   document.addEventListener('click', (e) => {
     if (!durationBtn.contains(e.target) && !durationMenu.contains(e.target)) {
       durationBtn.classList.remove('active');
@@ -194,6 +192,6 @@
     }
   });
 
-  // Initial label update
+  // first label set
   updateLabel();
 })();

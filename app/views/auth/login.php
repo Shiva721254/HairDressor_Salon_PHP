@@ -55,8 +55,7 @@ $titleText = match ($mode) {
     </div>
   <?php endif; ?>
 
-
   <div class="form-text mt-2">
-    Demo accounts: admin@salon.test / Admin123!, staff@salon.test / Staff123!, client@salon.test / Client123!
+    Demo credentials are documented in the project README.
   </div>
 </form>
