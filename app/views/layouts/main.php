@@ -32,7 +32,13 @@ if (empty($_SESSION['csrf_token']) || !is_string($_SESSION['csrf_token'])) {
 $user = $_SESSION['user'] ?? null;
 $isLoggedIn = is_array($user);
 $isAdmin = $isLoggedIn && (($user['role'] ?? '') === 'admin');
+$isStaff = $isLoggedIn && (($user['role'] ?? '') === 'staff');
 $csrfToken = (string)$_SESSION['csrf_token'];
+
+$cssPath = __DIR__ . '/../../public/assets/css/app.css';
+$jsPath = __DIR__ . '/../../public/assets/js/app.js';
+$cssVersion = is_file($cssPath) ? (string)filemtime($cssPath) : '1';
+$jsVersion = is_file($jsPath) ? (string)filemtime($jsPath) : '1';
 
 $adminActive = isPathActive($currentPath, ['/admin']);
 ?>
@@ -44,7 +50,7 @@ $adminActive = isPathActive($currentPath, ['/admin']);
     <title><?= htmlspecialchars($title ?? 'Salon App', ENT_QUOTES, 'UTF-8') ?></title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="/assets/css/app.css" rel="stylesheet">
+    <link href="/assets/css/app.css?v=<?= htmlspecialchars($cssVersion, ENT_QUOTES, 'UTF-8') ?>" rel="stylesheet">
 </head>
 <body>
 
@@ -59,6 +65,10 @@ $adminActive = isPathActive($currentPath, ['/admin']);
             <?= navLink('/services', 'Services', $currentPath) ?>
             <?= navLink('/appointments/new', 'Book', $currentPath) ?>
             <?= navLink('/appointments', 'Appointments', $currentPath) ?>
+            <?php if ($isStaff): ?>
+                <?= navLink('/staff/appointments', 'Staff Appointments', $currentPath) ?>
+                <?= navLink('/staff/availability', 'Staff Availability', $currentPath) ?>
+            <?php endif; ?>
            
 
             <?php if ($isAdmin): ?>
@@ -83,10 +93,16 @@ $adminActive = isPathActive($currentPath, ['/admin']);
                             <a class="dropdown-item" href="/admin/hairdressers">Manage Hairdressers</a>
                         </li>
                         <li>
+                            <a class="dropdown-item" href="/admin/staff">Manage Staff</a>
+                        </li>
+                        <li>
                             <a class="dropdown-item" href="/admin/availability">Manage Availability</a>
                         </li>
                         <li>
                             <a class="dropdown-item" href="/admin/gdpr-requests">GDPR Requests</a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="/admin/clients">Clients & History</a>
                         </li>
                     </ul>
                 </div>
@@ -98,8 +114,8 @@ $adminActive = isPathActive($currentPath, ['/admin']);
             <?php if ($isLoggedIn): ?>
                 <a href="/profile" class="btn btn-outline-secondary btn-sm">Profile</a>
                 <span class="small text-muted">
-                    <?= htmlspecialchars((string)($user['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
-                    (<?= htmlspecialchars((string)($user['role'] ?? ''), ENT_QUOTES, 'UTF-8') ?>)
+                    <?= htmlspecialchars((string)($user['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
+                    (<?= htmlspecialchars((string)($user['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?>)
                 </span>
 
                 <form method="POST" action="/logout" class="mb-0">
@@ -109,6 +125,8 @@ $adminActive = isPathActive($currentPath, ['/admin']);
             <?php else: ?>
                <a href="/register" class="btn btn-outline-primary btn-sm">Register</a>
                 <a href="/login" class="btn btn-primary btn-sm">Login</a>
+                <a href="/staff/login" class="btn btn-outline-success btn-sm">Staff Login</a>
+                <a href="/admin/login" class="btn btn-outline-danger btn-sm">Admin Login</a>
 
             <?php endif; ?>
         </div>
@@ -140,6 +158,6 @@ $adminActive = isPathActive($currentPath, ['/admin']);
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/assets/js/app.js"></script>
+<script src="/assets/js/app.js?v=<?= htmlspecialchars($jsVersion, ENT_QUOTES, 'UTF-8') ?>"></script>
 </body>
 </html>

@@ -4,39 +4,26 @@ declare(strict_types=1);
 namespace App\Controllers\Admin;
 
 use App\Core\Controller;
-use App\Repositories\HairdresserRepository;
+use App\Repositories\HairdresserRepositoryInterface;
 
 final class HairdresserAdminController extends Controller
 {
-    private function ensureAdmin(): array
+    public function __construct(private HairdresserRepositoryInterface $hairdressers)
     {
-        $user = $this->requireLogin();
-        if (($user['role'] ?? '') !== 'admin') {
-            http_response_code(403);
-            // We return user anyway; caller will return render.
-        }
-        return $user;
     }
 
-    private function isValidCsrf(): bool
+    private function requireAdmin(): void
     {
-        $token = (string)($_POST['csrf_token'] ?? '');
-        $session = (string)($_SESSION['csrf_token'] ?? '');
-        return $token !== '' && $session !== '' && hash_equals($session, $token);
+        $this->requireRole('admin');
     }
 
     public function index(): string
     {
-        $user = $this->ensureAdmin();
-        if (($user['role'] ?? '') !== 'admin') {
-            return $this->render('errors/403', ['title' => 'Forbidden']);
-        }
-
-        $repo = new HairdresserRepository();
+        $this->requireAdmin();
 
         return $this->render('admin/hairdressers/index', [
             'title' => 'Admin - Hairdressers',
-            'hairdressers' => $repo->all(),
+            'hairdressers' => $this->hairdressers->all(),
             'success' => $this->flash('success'),
             'error' => $this->flash('error'),
         ]);
@@ -44,10 +31,7 @@ final class HairdresserAdminController extends Controller
 
     public function create(): string
     {
-        $user = $this->ensureAdmin();
-        if (($user['role'] ?? '') !== 'admin') {
-            return $this->render('errors/403', ['title' => 'Forbidden']);
-        }
+        $this->requireAdmin();
 
         return $this->render('admin/hairdressers/create', [
             'title' => 'Add Hairdresser',
@@ -58,15 +42,8 @@ final class HairdresserAdminController extends Controller
 
     public function store(): string
     {
-        $user = $this->ensureAdmin();
-        if (($user['role'] ?? '') !== 'admin') {
-            return $this->render('errors/403', ['title' => 'Forbidden']);
-        }
-
-        if (!$this->isValidCsrf()) {
-            http_response_code(403);
-            return $this->render('errors/403', ['title' => 'Invalid CSRF token']);
-        }
+        $this->requireAdmin();
+        $this->requireCsrf();
 
         $name = trim((string)($_POST['name'] ?? ''));
 
@@ -83,8 +60,7 @@ final class HairdresserAdminController extends Controller
             ]);
         }
 
-        $repo = new HairdresserRepository();
-        $repo->create($name);
+        $this->hairdressers->create($name);
 
         $this->flash('success', 'Hairdresser created.');
         return $this->redirect('/admin/hairdressers');
@@ -92,10 +68,7 @@ final class HairdresserAdminController extends Controller
 
     public function edit(string $id): string
     {
-        $user = $this->ensureAdmin();
-        if (($user['role'] ?? '') !== 'admin') {
-            return $this->render('errors/403', ['title' => 'Forbidden']);
-        }
+        $this->requireAdmin();
 
         $hid = (int)$id;
         if ($hid <= 0) {
@@ -103,8 +76,7 @@ final class HairdresserAdminController extends Controller
             return $this->render('errors/404', ['title' => 'Hairdresser not found']);
         }
 
-        $repo = new HairdresserRepository();
-        $hairdresser = $repo->findById($hid);
+        $hairdresser = $this->hairdressers->findById($hid);
 
         if ($hairdresser === null) {
             http_response_code(404);
@@ -120,15 +92,8 @@ final class HairdresserAdminController extends Controller
 
     public function update(string $id): string
     {
-        $user = $this->ensureAdmin();
-        if (($user['role'] ?? '') !== 'admin') {
-            return $this->render('errors/403', ['title' => 'Forbidden']);
-        }
-
-        if (!$this->isValidCsrf()) {
-            http_response_code(403);
-            return $this->render('errors/403', ['title' => 'Invalid CSRF token']);
-        }
+        $this->requireAdmin();
+        $this->requireCsrf();
 
         $hid = (int)$id;
         if ($hid <= 0) {
@@ -136,8 +101,7 @@ final class HairdresserAdminController extends Controller
             return $this->render('errors/404', ['title' => 'Hairdresser not found']);
         }
 
-        $repo = new HairdresserRepository();
-        $hairdresser = $repo->findById($hid);
+        $hairdresser = $this->hairdressers->findById($hid);
         if ($hairdresser === null) {
             http_response_code(404);
             return $this->render('errors/404', ['title' => 'Hairdresser not found']);
@@ -160,7 +124,7 @@ final class HairdresserAdminController extends Controller
             ]);
         }
 
-        $repo->update($hid, $name);
+        $this->hairdressers->update($hid, $name);
 
         $this->flash('success', 'Hairdresser updated.');
         return $this->redirect('/admin/hairdressers');
@@ -168,15 +132,8 @@ final class HairdresserAdminController extends Controller
 
     public function delete(string $id): string
     {
-        $user = $this->ensureAdmin();
-        if (($user['role'] ?? '') !== 'admin') {
-            return $this->render('errors/403', ['title' => 'Forbidden']);
-        }
-
-        if (!$this->isValidCsrf()) {
-            http_response_code(403);
-            return $this->render('errors/403', ['title' => 'Invalid CSRF token']);
-        }
+        $this->requireAdmin();
+        $this->requireCsrf();
 
         $hid = (int)$id;
         if ($hid <= 0) {
@@ -184,12 +141,10 @@ final class HairdresserAdminController extends Controller
             return $this->render('errors/404', ['title' => 'Hairdresser not found']);
         }
 
-        $repo = new HairdresserRepository();
-
         // If appointments exist with this hairdresser, DB may throw due to FK.
         // If that happens, show a clean error message.
         try {
-            $repo->delete($hid);
+            $this->hairdressers->delete($hid);
             $this->flash('success', 'Hairdresser deleted.');
         } catch (\Throwable $e) {
             $this->flash('error', 'Cannot delete hairdresser because there are appointments linked to it.');

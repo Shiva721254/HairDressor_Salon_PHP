@@ -4,23 +4,38 @@ declare(strict_types=1);
 namespace App\Controllers\Admin;
 
 use App\Core\Controller;
-use App\Repositories\ServiceRepository;
+use App\Repositories\ServiceRepositoryInterface;
 
 final class ServiceAdminController extends Controller
 {
+    public function __construct(private ServiceRepositoryInterface $services)
+    {
+    }
+
+    private function requireAdmin(): void
+    {
+        $this->requireRole('admin');
+    }
+
+    /** @return array<int, string> */
+    private function validateServiceInput(string $name, int $duration, float $price): array
+    {
+        $errors = [];
+        if ($name === '') $errors[] = 'Service name is required.';
+        if ($duration < 15) $errors[] = 'Duration must be at least 15 minutes.';
+        if ($duration % 15 !== 0) $errors[] = 'Duration must be in 15-minute steps (15, 30, 45, ...).';
+        if ($price < 0) $errors[] = 'Price must be 0 or more.';
+
+        return $errors;
+    }
+
     public function index(): string
     {
-        $user = $this->requireLogin();
-        if (($user['role'] ?? '') !== 'admin') {
-            http_response_code(403);
-            return $this->render('errors/403', ['title' => 'Forbidden']);
-        }
-
-        $repo = new ServiceRepository();
+        $this->requireAdmin();
 
         return $this->render('admin/services/index', [
             'title' => 'Admin - Services',
-            'services' => $repo->all(),
+            'services' => $this->services->all(),
             'success' => $this->flash('success'),
             'error' => $this->flash('error'),
         ]);
@@ -28,11 +43,7 @@ final class ServiceAdminController extends Controller
 
     public function create(): string
     {
-        $user = $this->requireLogin();
-        if (($user['role'] ?? '') !== 'admin') {
-            http_response_code(403);
-            return $this->render('errors/403', ['title' => 'Forbidden']);
-        }
+        $this->requireAdmin();
 
         return $this->render('admin/services/create', [
             'title' => 'Add Service',
@@ -43,11 +54,7 @@ final class ServiceAdminController extends Controller
 
     public function store(): string
     {
-        $user = $this->requireLogin();
-        if (($user['role'] ?? '') !== 'admin') {
-            http_response_code(403);
-            return $this->render('errors/403', ['title' => 'Forbidden']);
-        }
+        $this->requireAdmin();
 
         $this->requireCsrf();
 
@@ -55,10 +62,7 @@ final class ServiceAdminController extends Controller
         $duration = (int)($_POST['duration_minutes'] ?? 0);
         $price = (float)($_POST['price'] ?? 0);
 
-        $errors = [];
-        if ($name === '') $errors[] = 'Service name is required.';
-        if ($duration <= 0) $errors[] = 'Duration must be greater than 0.';
-        if ($price < 0) $errors[] = 'Price must be 0 or more.';
+        $errors = $this->validateServiceInput($name, $duration, $price);
 
         if ($errors) {
             http_response_code(422);
@@ -73,8 +77,7 @@ final class ServiceAdminController extends Controller
             ]);
         }
 
-        $repo = new ServiceRepository();
-        $repo->create($name, $duration, $price);
+        $this->services->create($name, $duration, $price);
 
         $this->flash('success', 'Service created.');
         return $this->redirect('/admin/services');
@@ -82,11 +85,7 @@ final class ServiceAdminController extends Controller
 
     public function edit(string $id): string
     {
-        $user = $this->requireLogin();
-        if (($user['role'] ?? '') !== 'admin') {
-            http_response_code(403);
-            return $this->render('errors/403', ['title' => 'Forbidden']);
-        }
+        $this->requireAdmin();
 
         $sid = (int)$id;
         if ($sid <= 0) {
@@ -94,8 +93,7 @@ final class ServiceAdminController extends Controller
             return $this->render('errors/404', ['title' => 'Service not found']);
         }
 
-        $repo = new ServiceRepository();
-        $service = $repo->findById($sid);
+        $service = $this->services->findById($sid);
 
         if ($service === null) {
             http_response_code(404);
@@ -111,11 +109,7 @@ final class ServiceAdminController extends Controller
 
     public function update(string $id): string
     {
-        $user = $this->requireLogin();
-        if (($user['role'] ?? '') !== 'admin') {
-            http_response_code(403);
-            return $this->render('errors/403', ['title' => 'Forbidden']);
-        }
+        $this->requireAdmin();
 
         $this->requireCsrf();
 
@@ -129,13 +123,9 @@ final class ServiceAdminController extends Controller
         $duration = (int)($_POST['duration_minutes'] ?? 0);
         $price = (float)($_POST['price'] ?? 0);
 
-        $errors = [];
-        if ($name === '') $errors[] = 'Service name is required.';
-        if ($duration <= 0) $errors[] = 'Duration must be greater than 0.';
-        if ($price < 0) $errors[] = 'Price must be 0 or more.';
+        $errors = $this->validateServiceInput($name, $duration, $price);
 
-        $repo = new ServiceRepository();
-        $service = $repo->findById($sid);
+        $service = $this->services->findById($sid);
         if ($service === null) {
             http_response_code(404);
             return $this->render('errors/404', ['title' => 'Service not found']);
@@ -155,7 +145,7 @@ final class ServiceAdminController extends Controller
             ]);
         }
 
-        $repo->update($sid, $name, $duration, $price);
+        $this->services->update($sid, $name, $duration, $price);
 
         $this->flash('success', 'Service updated.');
         return $this->redirect('/admin/services');
@@ -163,11 +153,7 @@ final class ServiceAdminController extends Controller
 
     public function delete(string $id): string
     {
-        $user = $this->requireLogin();
-        if (($user['role'] ?? '') !== 'admin') {
-            http_response_code(403);
-            return $this->render('errors/403', ['title' => 'Forbidden']);
-        }
+        $this->requireAdmin();
 
         $this->requireCsrf();
 
@@ -177,8 +163,7 @@ final class ServiceAdminController extends Controller
             return $this->render('errors/404', ['title' => 'Service not found']);
         }
 
-        $repo = new ServiceRepository();
-        $repo->delete($sid);
+        $this->services->delete($sid);
 
         $this->flash('success', 'Service deleted.');
         return $this->redirect('/admin/services');

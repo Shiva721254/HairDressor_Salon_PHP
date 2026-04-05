@@ -58,6 +58,29 @@ $isLoggedIn = is_array($user);
 
                     <hr class="my-4">
 
+                    <h3 class="h6 mb-3 fw-semibold">📅 Opening Times</h3>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0 opening-times-table">
+                            <tbody>
+                            <?php foreach (($openingTimes ?? []) as $ot): ?>
+                                <?php $hours = (string)($ot['hours'] ?? ''); ?>
+                                <?php $isClosed = ($hours === 'Closed'); ?>
+                                <tr style="cursor: pointer;">
+                                    <th scope="row" class="w-40"><?= htmlspecialchars((string)($ot['day'] ?? ''), ENT_QUOTES, 'UTF-8') ?></th>
+                                    <td class="d-flex justify-content-between align-items-center gap-2">
+                                        <span class="fw-500"><?= htmlspecialchars($hours, ENT_QUOTES, 'UTF-8') ?></span>
+                                        <span class="badge <?= $isClosed ? 'bg-danger' : 'bg-success' ?>" style="font-size: 0.75rem;">
+                                            <?= $isClosed ? '🔴 Closed' : '🟢 Open' ?>
+                                        </span>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <hr class="my-4">
+
                     <div class="d-flex justify-content-between small text-muted">
                         <span>Status</span>
                         <span class="badge text-bg-success">Running</span>

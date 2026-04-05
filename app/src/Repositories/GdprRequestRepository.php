@@ -6,7 +6,7 @@ namespace App\Repositories;
 use App\Core\Db;
 use PDO;
 
-final class GdprRequestRepository
+final class GdprRequestRepository implements GdprRequestRepositoryInterface
 {
     private PDO $pdo;
 

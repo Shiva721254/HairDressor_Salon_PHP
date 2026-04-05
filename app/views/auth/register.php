@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 /** @var ?string $error */
 /** @var array $errors */
+/** @var array{name?:string,email?:string} $old */
 ?>
 
 <h1 class="mb-3">Create account</h1>
@@ -30,6 +31,21 @@ declare(strict_types=1);
            name="csrf_token"
            value="<?= htmlspecialchars((string)($_SESSION['csrf_token'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
 
+    <!-- Name -->
+    <div class="mb-3">
+        <label class="form-label" for="name">Name</label>
+        <input
+            class="form-control"
+            type="text"
+            id="name"
+            name="name"
+            value="<?= htmlspecialchars((string)($old['name'] ?? $_POST['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+            required
+            minlength="2"
+            maxlength="100"
+            autocomplete="name">
+    </div>
+
     <!-- Email -->
     <div class="mb-3">
         <label class="form-label" for="email">Email</label>
@@ -38,7 +54,7 @@ declare(strict_types=1);
             type="email"
             id="email"
             name="email"
-            value="<?= htmlspecialchars((string)($_POST['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+            value="<?= htmlspecialchars((string)($old['email'] ?? $_POST['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
             required
             autocomplete="email">
     </div>

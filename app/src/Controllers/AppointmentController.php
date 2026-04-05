@@ -5,12 +5,36 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Core\Controller;
-use App\Repositories\AppointmentRepository;
-use App\Repositories\HairdresserRepository;
-use App\Repositories\ServiceRepository;
+use App\Repositories\AppointmentRepositoryInterface;
+use App\Repositories\HairdresserRepositoryInterface;
+use App\Repositories\ServiceRepositoryInterface;
+use App\Repositories\UserRepositoryInterface;
+use App\Services\AvailabilityService;
+use App\Services\BookingService;
 
 final class AppointmentController extends Controller
 {
+    public function __construct(
+        private AppointmentRepositoryInterface $appointments,
+        private HairdresserRepositoryInterface $hairdressers,
+        private ServiceRepositoryInterface $services,
+        private UserRepositoryInterface $users,
+        private BookingService $bookingService,
+        private AvailabilityService $availabilityService
+    ) {
+    }
+
+    private function requireAdmin(): array
+    {
+        $user = $this->requireLogin();
+        if (($user['role'] ?? '') !== 'admin') {
+            http_response_code(403);
+            echo $this->render('errors/403', ['title' => 'Forbidden']);
+            exit;
+        }
+        return $user;
+    }
+
     public function index(): string
     {
         $user = $this->requireLogin();
@@ -44,8 +68,7 @@ final class AppointmentController extends Controller
             }
         }
 
-        $repo = new AppointmentRepository();
-        $appointments = $repo->allWithDetails(
+        $appointments = $this->appointments->allWithDetails(
             $filter,
             $isAdmin ? null : (int)($user['id'] ?? 0),
             $isAdmin ? $hairdresserId : null,
@@ -55,7 +78,7 @@ final class AppointmentController extends Controller
 
         $hairdressers = [];
         if ($isAdmin) {
-            $hairdressers = (new HairdresserRepository())->all();
+            $hairdressers = $this->hairdressers->all();
         }
 
         return $this->render('appointments/index', [
@@ -84,8 +107,7 @@ final class AppointmentController extends Controller
             return $this->render('errors/404', ['title' => 'Invalid appointment']);
         }
 
-        $repo = new AppointmentRepository();
-        $appointment = $repo->findWithDetails($idInt);
+        $appointment = $this->appointments->findWithDetails($idInt);
 
         if ($appointment === null) {
             http_response_code(404);
@@ -110,13 +132,10 @@ final class AppointmentController extends Controller
     {
         $this->requireLogin();
 
-        $hairRepo = new HairdresserRepository();
-        $serviceRepo = new ServiceRepository();
-
         return $this->render('appointments/create', [
             'title' => 'Book an appointment',
-            'hairdressers' => $hairRepo->all(),
-            'services' => $serviceRepo->all(),
+            'hairdressers' => $this->hairdressers->all(),
+            'services' => $this->services->all(),
             'errors' => [],
         ]);
     }
@@ -142,21 +161,18 @@ final class AppointmentController extends Controller
         $tm = \DateTimeImmutable::createFromFormat('H:i', $timeHi);
         if ($tm === false || $tm->format('H:i') !== $timeHi) $errors[] = 'Invalid appointment time.';
 
-        $hairRepo = new HairdresserRepository();
-        $serviceRepo = new ServiceRepository();
-
         if ($errors) {
             http_response_code(422);
             return $this->render('appointments/create', [
                 'title' => 'Book an appointment',
-                'hairdressers' => $hairRepo->all(),
-                'services' => $serviceRepo->all(),
+                'hairdressers' => $this->hairdressers->all(),
+                'services' => $this->services->all(),
                 'errors' => $errors,
             ]);
         }
 
-        $hairdresser = $hairRepo->findById($hairdresserId);
-        $service     = $serviceRepo->findById($serviceId);
+        $hairdresser = $this->hairdressers->findById($hairdresserId);
+        $service     = $this->services->findById($serviceId);
 
         if ($hairdresser === null) $errors[] = 'Selected hairdresser not found.';
         if ($service === null) $errors[] = 'Selected service not found.';
@@ -165,8 +181,8 @@ final class AppointmentController extends Controller
             http_response_code(422);
             return $this->render('appointments/create', [
                 'title' => 'Book an appointment',
-                'hairdressers' => $hairRepo->all(),
-                'services' => $serviceRepo->all(),
+                'hairdressers' => $this->hairdressers->all(),
+                'services' => $this->services->all(),
                 'errors' => $errors,
             ]);
         }
@@ -198,14 +214,13 @@ final class AppointmentController extends Controller
             return $this->redirect('/appointments/new');
         }
 
-        if ($this->overlapsExisting($hairdresserId, $serviceId, $dateYmd, $timeHi)) {
+        if ($this->bookingService->overlapsExisting($hairdresserId, $serviceId, $dateYmd, $timeHi)) {
             http_response_code(409);
             $this->flash('error', 'Slot no longer available. Please pick another time.');
             return $this->redirect('/appointments/new');
         }
 
-        $repo = new AppointmentRepository();
-        $repo->create($hairdresserId, $serviceId, $userId, $dateYmd, $timeHi, 'booked');
+        $this->appointments->create($hairdresserId, $serviceId, $userId, $dateYmd, $timeHi, 'booked');
 
         $this->flash('success', 'Appointment booked successfully.');
         return $this->redirect('/appointments');
@@ -240,8 +255,7 @@ public function slots(): string
             ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         }
 
-        $repo = new AppointmentRepository();
-        $slots = $repo->getAvailableSlots($hairdresserId, $serviceId, $dateRaw);
+        $slots = $this->availabilityService->availableSlots($hairdresserId, $serviceId, $dateRaw);
 
         http_response_code(200);
         return json_encode([
@@ -261,6 +275,37 @@ public function slots(): string
     }
 }
 
+    public function availabilityApi(): string
+    {
+        $hairdresserId = (int)($_GET['hairdresser_id'] ?? 0);
+        $serviceId = (int)($_GET['service_id'] ?? 0);
+        $dateRaw = trim((string)($_GET['date'] ?? $_GET['appointment_date'] ?? ''));
+
+        header('Content-Type: application/json; charset=UTF-8');
+
+        $dt = \DateTimeImmutable::createFromFormat('Y-m-d', $dateRaw);
+        $dateOk = ($dt !== false && $dt->format('Y-m-d') === $dateRaw);
+
+        if ($hairdresserId <= 0 || $serviceId <= 0 || !$dateOk) {
+            http_response_code(400);
+            return json_encode([
+                'ok' => false,
+                'error' => 'Invalid parameters. Expect hairdresser_id, service_id, date (Y-m-d).',
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        }
+
+        $slots = $this->availabilityService->availableSlots($hairdresserId, $serviceId, $dateRaw);
+
+        http_response_code(200);
+        return json_encode([
+            'ok' => true,
+            'hairdresser_id' => $hairdresserId,
+            'service_id' => $serviceId,
+            'date' => $dateRaw,
+            'slots' => $slots,
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+    }
+
 
 
     public function cancel(string $id): string
@@ -276,8 +321,7 @@ public function slots(): string
             return $this->render('errors/404', ['title' => 'Invalid appointment']);
         }
 
-        $repo = new AppointmentRepository();
-        $appointment = $repo->findWithDetails($idInt);
+        $appointment = $this->appointments->findWithDetails($idInt);
 
         if ($appointment === null) {
             http_response_code(404);
@@ -295,7 +339,7 @@ public function slots(): string
             return $this->redirect('/appointments/' . $idInt);
         }
 
-        $repo->cancel($idInt);
+        $this->appointments->cancel($idInt);
         $this->flash('success', 'Appointment cancelled successfully.');
 
         return $this->redirect('/appointments/' . $idInt);
@@ -318,8 +362,7 @@ public function slots(): string
             return $this->render('errors/404', ['title' => 'Invalid appointment']);
         }
 
-        $repo = new AppointmentRepository();
-        $appointment = $repo->findWithDetails($idInt);
+        $appointment = $this->appointments->findWithDetails($idInt);
 
         if ($appointment === null) {
             http_response_code(404);
@@ -337,7 +380,7 @@ public function slots(): string
             return $this->redirect('/appointments/' . $idInt);
         }
 
-        $ok = $repo->complete($idInt);
+        $ok = $this->appointments->complete($idInt);
 
         if (!$ok) {
             $this->flash('error', 'Could not complete appointment (it may not be booked anymore).');
@@ -348,36 +391,217 @@ public function slots(): string
         return $this->redirect('/appointments/' . $idInt);
     }
 
-    private function overlapsExisting(int $hairdresserId, int $serviceId, string $dateYmd, string $timeHi): bool
+    public function adminCreate(): string
     {
-        $serviceRepo = new ServiceRepository();
-        $apptRepo = new AppointmentRepository();
+        $this->requireAdmin();
 
-        $service = $serviceRepo->findById($serviceId);
-        if ($service === null) return true;
+        return $this->render('appointments/admin_form', [
+            'title' => 'Admin - Create Appointment',
+            'mode' => 'create',
+            'errors' => [],
+            'clients' => $this->users->allClients(),
+            'hairdressers' => $this->hairdressers->all(),
+            'services' => $this->services->all(),
+            'old' => [
+                'user_id' => '',
+                'hairdresser_id' => '',
+                'service_id' => '',
+                'appointment_date' => '',
+                'appointment_time' => '',
+                'status' => 'booked',
+            ],
+            'appointmentId' => null,
+        ]);
+    }
 
-        $duration = max(1, (int)($service['duration_minutes'] ?? 0));
+    public function adminStore(): string
+    {
+        $this->requireAdmin();
+        $this->requireCsrf();
 
-        $start = \DateTimeImmutable::createFromFormat('Y-m-d H:i', $dateYmd . ' ' . $timeHi);
-        if ($start === false) return true;
+        $userId = (int)($_POST['user_id'] ?? 0);
+        $hairdresserId = (int)($_POST['hairdresser_id'] ?? 0);
+        $serviceId = (int)($_POST['service_id'] ?? 0);
+        $dateYmd = trim((string)($_POST['appointment_date'] ?? ''));
+        $timeHi = trim((string)($_POST['appointment_time'] ?? ''));
+        $status = trim((string)($_POST['status'] ?? 'booked'));
 
-        $end = $start->modify("+{$duration} minutes");
+        $errors = $this->validateAdminAppointmentInput($userId, $hairdresserId, $serviceId, $dateYmd, $timeHi, $status);
 
-        $bookings = $apptRepo->bookingsForDate($hairdresserId, $dateYmd);
-
-        foreach ($bookings as $b) {
-            $bStart = \DateTimeImmutable::createFromFormat(
-                'Y-m-d H:i',
-                $dateYmd . ' ' . (string)($b['start_time'] ?? '')
-            );
-            if ($bStart === false) continue;
-
-            $bDur = max(1, (int)($b['duration_minutes'] ?? 0));
-            $bEnd = $bStart->modify("+{$bDur} minutes");
-
-            if ($start < $bEnd && $end > $bStart) return true;
+        if (!$errors && $status !== 'cancelled' && $this->bookingService->overlapsExisting($hairdresserId, $serviceId, $dateYmd, $timeHi)) {
+            $errors[] = 'Selected slot overlaps an existing appointment.';
         }
 
-        return false;
+        if ($errors) {
+            http_response_code(422);
+            return $this->render('appointments/admin_form', [
+                'title' => 'Admin - Create Appointment',
+                'mode' => 'create',
+                'errors' => $errors,
+                'clients' => $this->users->allClients(),
+                'hairdressers' => $this->hairdressers->all(),
+                'services' => $this->services->all(),
+                'old' => [
+                    'user_id' => (string)$userId,
+                    'hairdresser_id' => (string)$hairdresserId,
+                    'service_id' => (string)$serviceId,
+                    'appointment_date' => $dateYmd,
+                    'appointment_time' => $timeHi,
+                    'status' => $status,
+                ],
+                'appointmentId' => null,
+            ]);
+        }
+
+        $this->appointments->create($hairdresserId, $serviceId, $userId, $dateYmd, $timeHi, $status);
+        $this->flash('success', 'Appointment created by admin.');
+        return $this->redirect('/appointments?filter=all');
     }
+
+    public function adminEdit(string $id): string
+    {
+        $this->requireAdmin();
+
+        $idInt = (int)$id;
+        if ($idInt <= 0) {
+            http_response_code(404);
+            return $this->render('errors/404', ['title' => 'Invalid appointment']);
+        }
+
+        $appointment = $this->appointments->findWithDetails($idInt);
+        if ($appointment === null) {
+            http_response_code(404);
+            return $this->render('errors/404', ['title' => 'Appointment not found']);
+        }
+
+        return $this->render('appointments/admin_form', [
+            'title' => 'Admin - Edit Appointment',
+            'mode' => 'edit',
+            'errors' => [],
+            'clients' => $this->users->allClients(),
+            'hairdressers' => $this->hairdressers->all(),
+            'services' => $this->services->all(),
+            'old' => [
+                'user_id' => (string)($appointment['user_id'] ?? ''),
+                'hairdresser_id' => (string)($appointment['hairdresser_id'] ?? ''),
+                'service_id' => (string)($appointment['service_id'] ?? ''),
+                'appointment_date' => (string)($appointment['appointment_date'] ?? ''),
+                'appointment_time' => substr((string)($appointment['appointment_time'] ?? ''), 0, 5),
+                'status' => (string)($appointment['status'] ?? 'booked'),
+            ],
+            'appointmentId' => $idInt,
+        ]);
+    }
+
+    public function adminUpdate(string $id): string
+    {
+        $this->requireAdmin();
+        $this->requireCsrf();
+
+        $idInt = (int)$id;
+        if ($idInt <= 0) {
+            http_response_code(404);
+            return $this->render('errors/404', ['title' => 'Invalid appointment']);
+        }
+
+        $existing = $this->appointments->findWithDetails($idInt);
+        if ($existing === null) {
+            http_response_code(404);
+            return $this->render('errors/404', ['title' => 'Appointment not found']);
+        }
+
+        $userId = (int)($_POST['user_id'] ?? 0);
+        $hairdresserId = (int)($_POST['hairdresser_id'] ?? 0);
+        $serviceId = (int)($_POST['service_id'] ?? 0);
+        $dateYmd = trim((string)($_POST['appointment_date'] ?? ''));
+        $timeHi = trim((string)($_POST['appointment_time'] ?? ''));
+        $status = trim((string)($_POST['status'] ?? 'booked'));
+
+        $errors = $this->validateAdminAppointmentInput($userId, $hairdresserId, $serviceId, $dateYmd, $timeHi, $status);
+
+        if (!$errors && $status !== 'cancelled' && $this->bookingService->overlapsExisting($hairdresserId, $serviceId, $dateYmd, $timeHi, $idInt)) {
+            $errors[] = 'Selected slot overlaps an existing appointment.';
+        }
+
+        if ($errors) {
+            http_response_code(422);
+            return $this->render('appointments/admin_form', [
+                'title' => 'Admin - Edit Appointment',
+                'mode' => 'edit',
+                'errors' => $errors,
+                'clients' => $this->users->allClients(),
+                'hairdressers' => $this->hairdressers->all(),
+                'services' => $this->services->all(),
+                'old' => [
+                    'user_id' => (string)$userId,
+                    'hairdresser_id' => (string)$hairdresserId,
+                    'service_id' => (string)$serviceId,
+                    'appointment_date' => $dateYmd,
+                    'appointment_time' => $timeHi,
+                    'status' => $status,
+                ],
+                'appointmentId' => $idInt,
+            ]);
+        }
+
+        $this->appointments->updateDetails($idInt, $hairdresserId, $serviceId, $userId, $dateYmd, $timeHi, $status);
+        $this->flash('success', 'Appointment updated by admin.');
+        return $this->redirect('/appointments?filter=all');
+    }
+
+    public function adminDelete(string $id): string
+    {
+        $this->requireAdmin();
+        $this->requireCsrf();
+
+        $idInt = (int)$id;
+        if ($idInt <= 0) {
+            http_response_code(404);
+            return $this->render('errors/404', ['title' => 'Invalid appointment']);
+        }
+
+        $this->appointments->deleteById($idInt);
+        $this->flash('success', 'Appointment deleted by admin.');
+        return $this->redirect('/appointments?filter=all');
+    }
+
+    private function validateAdminAppointmentInput(
+        int $userId,
+        int $hairdresserId,
+        int $serviceId,
+        string $dateYmd,
+        string $timeHi,
+        string $status
+    ): array {
+        $errors = [];
+
+        if ($userId <= 0) $errors[] = 'Select a client.';
+        if ($hairdresserId <= 0) $errors[] = 'Select a hairdresser.';
+        if ($serviceId <= 0) $errors[] = 'Select a service.';
+
+        $dt = \DateTimeImmutable::createFromFormat('Y-m-d', $dateYmd);
+        if ($dt === false || $dt->format('Y-m-d') !== $dateYmd) $errors[] = 'Invalid appointment date.';
+
+        $tm = \DateTimeImmutable::createFromFormat('H:i', $timeHi);
+        if ($tm === false || $tm->format('H:i') !== $timeHi) $errors[] = 'Invalid appointment time.';
+
+        if (!in_array($status, ['booked', 'cancelled', 'completed'], true)) {
+            $errors[] = 'Invalid status.';
+        }
+
+        if (!$errors && $this->users->findById($userId) === null) {
+            $errors[] = 'Selected client not found.';
+        }
+
+        if (!$errors && $this->hairdressers->findById($hairdresserId) === null) {
+            $errors[] = 'Selected hairdresser not found.';
+        }
+
+        if (!$errors && $this->services->findById($serviceId) === null) {
+            $errors[] = 'Selected service not found.';
+        }
+
+        return $errors;
+    }
+
 }

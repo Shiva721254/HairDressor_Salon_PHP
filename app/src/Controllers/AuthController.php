@@ -4,41 +4,64 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Core\Controller;
-use App\Repositories\UserRepository;
+use App\Repositories\UserRepositoryInterface;
 
 final class AuthController extends Controller
 {
+    public function __construct(private UserRepositoryInterface $users)
+    {
+    }
+
+    private function redirectIfLoggedIn(): void
+    {
+        if ($this->currentUser() !== null) {
+            $this->redirect('/appointments');
+        }
+    }
+
+    /** @param array<int, string> $errors */
+    private function renderLogin(string $title, string $action, string $mode, array $errors = [], string $oldEmail = ''): string
+    {
+        return $this->render('auth/login', [
+            'title' => $title,
+            'errors' => $errors,
+            'oldEmail' => $oldEmail,
+            'action' => $action,
+            'mode' => $mode,
+        ]);
+    }
+
     public function showRegister(): string
     {
-        // If already logged in, redirect to main flow
-        if ($this->currentUser() !== null) {
-            return $this->redirect('/appointments');
-        }
+        $this->redirectIfLoggedIn();
 
         return $this->render('auth/register', [
             'title' => 'Register',
             'errors' => [],
-            'old' => ['email' => ''],
+            'old' => ['name' => '', 'email' => ''],
         ]);
     }
 
     public function showLogin(): string
     {
-        // Optional: redirect already logged-in users away from login page
-        if ($this->currentUser() !== null) {
-            return $this->redirect('/appointments');
-        }
-
-        return $this->render('auth/login', [
-            'title' => 'Login',
-            'errors' => [],
-            'oldEmail' => '',
-        ]);
+        $this->redirectIfLoggedIn();
+        return $this->renderLogin('Client Login', '/login', 'client');
     }
 
-    public function login(): string
+    public function showAdminLogin(): string
     {
-        // ✅ CSRF protection
+        $this->redirectIfLoggedIn();
+        return $this->renderLogin('Admin Login', '/admin/login', 'admin');
+    }
+
+    public function showStaffLogin(): string
+    {
+        $this->redirectIfLoggedIn();
+        return $this->renderLogin('Staff Login', '/staff/login', 'staff');
+    }
+
+    private function loginByRole(string $requiredRole, string $actionPath, string $title, string $mode): string
+    {
         $this->requireCsrf();
 
         $email = trim((string)($_POST['email'] ?? ''));
@@ -54,34 +77,59 @@ final class AuthController extends Controller
 
         if ($errors) {
             http_response_code(422);
-            return $this->render('auth/login', [
-                'title' => 'Login',
-                'errors' => $errors,
-                'oldEmail' => $email,
-            ]);
+            return $this->renderLogin($title, $actionPath, $mode, $errors, $email);
         }
 
-        $repo = new UserRepository();
-        $user = $repo->findByEmail($email);
-
-        if ($user === null || !password_verify($password, (string)$user['password_hash'])) {
+        $user = $this->users->findByEmail($email);
+        if (
+            $user === null ||
+            !password_verify($password, (string)$user['password_hash']) ||
+            (string)($user['role'] ?? '') !== $requiredRole
+        ) {
             http_response_code(401);
-            return $this->render('auth/login', [
-                'title' => 'Login',
-                'errors' => ['Invalid email or password.'],
-                'oldEmail' => $email,
-            ]);
+            return $this->renderLogin(
+                $title,
+                $actionPath,
+                $mode,
+                ['Invalid email or password for this login route.'],
+                $email
+            );
         }
 
-        // Store minimal identity in session
         $_SESSION['user'] = [
             'id' => (int)$user['id'],
+            'name' => (string)($user['name'] ?? ''),
             'email' => (string)$user['email'],
             'role' => (string)$user['role'],
+            'hairdresser_id' => isset($user['hairdresser_id']) ? (int)$user['hairdresser_id'] : null,
         ];
 
         $this->flash('success', 'Logged in successfully.');
+
+        if ($requiredRole === 'admin') {
+            return $this->redirect('/appointments?filter=all');
+        }
+
+        if ($requiredRole === 'staff') {
+            return $this->redirect('/staff/appointments');
+        }
+
         return $this->redirect('/appointments');
+    }
+
+    public function login(): string
+    {
+        return $this->loginByRole('client', '/login', 'Client Login', 'client');
+    }
+
+    public function adminLogin(): string
+    {
+        return $this->loginByRole('admin', '/admin/login', 'Admin Login', 'admin');
+    }
+
+    public function staffLogin(): string
+    {
+        return $this->loginByRole('staff', '/staff/login', 'Staff Login', 'staff');
     }
 
     public function logout(): string
@@ -98,12 +146,16 @@ final class AuthController extends Controller
     {
         $this->requireCsrf();
 
+        $name = trim((string)($_POST['name'] ?? ''));
         $email = trim((string)($_POST['email'] ?? ''));
         $password = (string)($_POST['password'] ?? '');
         $confirm  = (string)($_POST['password_confirm'] ?? '');
 
         $errors = [];
 
+        if ($name === '' || mb_strlen($name) < 2 || mb_strlen($name) > 100) {
+            $errors[] = 'Name must be between 2 and 100 characters.';
+        }
         if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $errors[] = 'Enter a valid email address.';
         }
@@ -116,8 +168,7 @@ final class AuthController extends Controller
             $errors[] = 'Passwords do not match.';
         }
 
-        $repo = new UserRepository();
-        if (!$errors && $repo->findByEmail($email) !== null) {
+        if (!$errors && $this->users->findByEmail($email) !== null) {
             $errors[] = 'An account with this email already exists.';
         }
 
@@ -126,17 +177,19 @@ final class AuthController extends Controller
             return $this->render('auth/register', [
                 'title' => 'Register',
                 'errors' => $errors,
-                'old' => ['email' => $email],
+                'old' => ['name' => $name, 'email' => $email],
             ]);
         }
 
         $hash = password_hash($password, PASSWORD_DEFAULT);
-        $userId = $repo->create($email, $hash, 'client');
+        $userId = $this->users->create($name, $email, $hash, 'client');
 
         $_SESSION['user'] = [
             'id' => (int)$userId,
+            'name' => $name,
             'email' => $email,
             'role' => 'client',
+            'hairdresser_id' => null,
         ];
 
         $this->flash('success', 'Account created. Welcome!');

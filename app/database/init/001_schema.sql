@@ -1,8 +1,18 @@
+CREATE TABLE roles (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(20) NOT NULL UNIQUE
+);
+
+INSERT INTO roles (name) VALUES ('client'), ('staff'), ('admin');
+
 CREATE TABLE users (
     id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
-    role ENUM('client','admin') NOT NULL DEFAULT 'client',
+    role ENUM('client','staff','admin') NOT NULL DEFAULT 'client',
+    role_id INT NULL,
+    hairdresser_id INT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -50,4 +60,26 @@ CREATE TABLE gdpr_requests (
     status ENUM('pending','processed') NOT NULL DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+ALTER TABLE users
+    ADD CONSTRAINT fk_users_hairdresser
+    FOREIGN KEY (hairdresser_id) REFERENCES hairdressers(id)
+    ON DELETE SET NULL;
+
+ALTER TABLE users
+    ADD CONSTRAINT fk_users_role
+    FOREIGN KEY (role_id) REFERENCES roles(id)
+    ON DELETE SET NULL;
+
+CREATE TABLE unavailability_slots (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    hairdresser_id INT NOT NULL,
+    slot_date DATE NOT NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    note VARCHAR(255) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (hairdresser_id) REFERENCES hairdressers(id)
+        ON DELETE CASCADE
 );

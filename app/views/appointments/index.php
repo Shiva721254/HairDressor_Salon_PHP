@@ -46,10 +46,10 @@ function statusBadge(string $status): string
     $status = strtolower($status);
 
     return match ($status) {
-        'booked'    => '<span class="badge bg-primary">Booked</span>',
-        'cancelled' => '<span class="badge bg-secondary">Cancelled</span>',
-        'completed' => '<span class="badge bg-success">Completed</span>',
-        default     => '<span class="badge bg-dark">' .
+        'booked'    => '<span class="status-pill status-booked">Booked</span>',
+        'cancelled' => '<span class="status-pill status-cancelled">Cancelled</span>',
+        'completed' => '<span class="status-pill status-completed">Completed</span>',
+        default     => '<span class="status-pill status-unknown">' .
             htmlspecialchars($status, ENT_QUOTES, 'UTF-8') .
             '</span>',
     };
@@ -58,7 +58,11 @@ function statusBadge(string $status): string
 
 <div class="d-flex align-items-center justify-content-between mb-3">
     <h1 class="mb-0">Appointments</h1>
-    <a class="btn btn-primary" href="/appointments/new">Book new</a>
+    <?php if ($isAdmin): ?>
+        <a class="btn btn-primary" href="/admin/appointments/new">Create appointment</a>
+    <?php else: ?>
+        <a class="btn btn-primary" href="/appointments/new">Book new</a>
+    <?php endif; ?>
 </div>
 
 <ul class="nav nav-tabs mb-3">
@@ -67,6 +71,12 @@ function statusBadge(string $status): string
     <?= tabLink('cancelled', 'Cancelled', $filter) ?>
     <?= tabLink('completed', 'Completed', $filter) ?>
 </ul>
+
+<?php if (!$isAdmin): ?>
+    <div class="alert alert-info py-2">
+        Completed appointments are marked by admins after service is done.
+    </div>
+<?php endif; ?>
 
 <?php if ($isAdmin): ?>
     <?php
@@ -198,6 +208,20 @@ function statusBadge(string $status): string
 
                     <td class="text-nowrap">
                         <a class="btn btn-sm btn-outline-primary" href="/appointments/<?= $id ?>">View</a>
+
+                        <?php if ($isAdmin): ?>
+                            <a class="btn btn-sm btn-outline-warning" href="/admin/appointments/<?= $id ?>/edit">Edit</a>
+                            <form method="POST"
+                                  action="/admin/appointments/<?= $id ?>/delete"
+                                  class="d-inline"
+                                  onsubmit="return confirm('Delete this appointment permanently?');">
+                                <input type="hidden" name="csrf_token"
+                                       value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    Delete
+                                </button>
+                            </form>
+                        <?php endif; ?>
 
                         <?php if ($isBooked && $canManage): ?>
                             <?php if ($isAdmin): ?>

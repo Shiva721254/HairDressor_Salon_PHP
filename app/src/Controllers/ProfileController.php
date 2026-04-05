@@ -4,24 +4,49 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Core\Controller;
-use App\Repositories\AppointmentRepository;
-use App\Repositories\GdprRequestRepository;
-use App\Repositories\UserRepository;
+use App\Repositories\AppointmentRepositoryInterface;
+use App\Repositories\GdprRequestRepositoryInterface;
+use App\Repositories\UserRepositoryInterface;
 
 final class ProfileController extends Controller
 {
+    public function __construct(
+        private UserRepositoryInterface $users,
+        private AppointmentRepositoryInterface $appointments,
+        private GdprRequestRepositoryInterface $gdprRequests
+    ) {
+    }
+
+    /**
+     * @param array<int, string> $errors
+     * @param array{name:string,email:string} $old
+     */
+    private function renderProfileForm(array $errors, array $old, ?string $success = null, ?int $statusCode = null): string
+    {
+        if ($statusCode !== null) {
+            http_response_code($statusCode);
+        }
+
+        return $this->render('auth/profile', [
+            'title' => 'My Profile',
+            'errors' => $errors,
+            'old' => $old,
+            'success' => $success,
+        ]);
+    }
+
     public function show(): string
     {
         $user = $this->requireLogin();
 
-        return $this->render('auth/profile', [
-            'title' => 'My Profile',
-            'errors' => [],
-            'old' => [
+        return $this->renderProfileForm(
+            [],
+            [
+                'name' => (string)($user['name'] ?? ''),
                 'email' => (string)($user['email'] ?? ''),
             ],
-            'success' => $this->flash('success'),
-        ]);
+            $this->flash('success')
+        );
     }
 
     public function update(): string
@@ -31,12 +56,17 @@ final class ProfileController extends Controller
 
         $userId = (int)($user['id'] ?? 0);
 
+        $name = trim((string)($_POST['name'] ?? ''));
         $email = trim((string)($_POST['email'] ?? ''));
         $currentPassword = (string)($_POST['current_password'] ?? '');
         $newPassword = (string)($_POST['new_password'] ?? '');
         $confirmPassword = (string)($_POST['new_password_confirm'] ?? '');
 
         $errors = [];
+
+        if ($name === '' || mb_strlen($name) < 2 || mb_strlen($name) > 100) {
+            $errors[] = 'Name must be between 2 and 100 characters.';
+        }
 
         if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $errors[] = 'Enter a valid email address.';
@@ -56,49 +86,36 @@ final class ProfileController extends Controller
         }
 
         if ($errors) {
-            http_response_code(422);
-            return $this->render('auth/profile', [
-                'title' => 'My Profile',
-                'errors' => $errors,
-                'old' => ['email' => $email],
-                'success' => null,
-            ]);
+            return $this->renderProfileForm($errors, ['name' => $name, 'email' => $email], null, 422);
         }
 
-        $repo = new UserRepository();
-        $authUser = $repo->findAuthById($userId);
+        $authUser = $this->users->findAuthById($userId);
 
         if ($authUser === null || !password_verify($currentPassword, (string)$authUser['password_hash'])) {
-            http_response_code(401);
-            return $this->render('auth/profile', [
-                'title' => 'My Profile',
-                'errors' => ['Current password is incorrect.'],
-                'old' => ['email' => $email],
-                'success' => null,
-            ]);
+            return $this->renderProfileForm(['Current password is incorrect.'], ['name' => $name, 'email' => $email], null, 401);
         }
 
-        $existing = $repo->findByEmail($email);
+        $existing = $this->users->findByEmail($email);
         if ($existing !== null && (int)$existing['id'] !== $userId) {
-            http_response_code(422);
-            return $this->render('auth/profile', [
-                'title' => 'My Profile',
-                'errors' => ['That email address is already in use.'],
-                'old' => ['email' => $email],
-                'success' => null,
-            ]);
+            return $this->renderProfileForm(['That email address is already in use.'], ['name' => $name, 'email' => $email], null, 422);
         }
 
         $changed = false;
 
+        if ($name !== (string)($authUser['name'] ?? '')) {
+            $this->users->updateName($userId, $name);
+            $_SESSION['user']['name'] = $name;
+            $changed = true;
+        }
+
         if ($email !== (string)($authUser['email'] ?? '')) {
-            $repo->updateEmail($userId, $email);
+            $this->users->updateEmail($userId, $email);
             $_SESSION['user']['email'] = $email;
             $changed = true;
         }
 
         if ($newPassword !== '') {
-            $repo->updatePassword($userId, password_hash($newPassword, PASSWORD_DEFAULT));
+            $this->users->updatePassword($userId, password_hash($newPassword, PASSWORD_DEFAULT));
             $changed = true;
         }
 
@@ -117,17 +134,16 @@ final class ProfileController extends Controller
 
         $userId = (int)($user['id'] ?? 0);
 
-        $repo = new UserRepository();
-        $userRow = $repo->findById($userId);
+        $userRow = $this->users->findById($userId);
 
         if ($userRow === null) {
             http_response_code(404);
             return $this->render('errors/404', ['title' => 'User not found']);
         }
 
-        $appointments = (new AppointmentRepository())->allWithDetails('all', $userId);
+        $appointments = $this->appointments->allWithDetails('all', $userId);
 
-        (new GdprRequestRepository())->create($userId, 'export');
+        $this->gdprRequests->create($userId, 'export');
 
         $payload = [
             'user' => $userRow,
@@ -149,7 +165,7 @@ final class ProfileController extends Controller
         $this->requireCsrf();
 
         $userId = (int)($user['id'] ?? 0);
-        (new GdprRequestRepository())->create($userId, 'deletion');
+        $this->gdprRequests->create($userId, 'deletion');
 
         $this->flash('success', 'Deletion request received. We will contact you to confirm.');
         return $this->redirect('/profile');

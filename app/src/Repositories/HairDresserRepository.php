@@ -6,7 +6,7 @@ namespace App\Repositories;
 use App\Core\Db;
 use PDO;
 
-final class HairdresserRepository
+final class HairdresserRepository implements HairdresserRepositoryInterface
 {
     private PDO $pdo;
 

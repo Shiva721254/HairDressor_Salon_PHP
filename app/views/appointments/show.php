@@ -61,11 +61,11 @@ $isBooked = ($status === 'booked');
         <th>Status</th>
         <td>
             <?php if ($status === 'cancelled'): ?>
-                <span class="badge text-bg-secondary">Cancelled</span>
+                <span class="status-pill status-cancelled">Cancelled</span>
             <?php elseif ($status === 'completed'): ?>
-                <span class="badge text-bg-success">Completed</span>
+                <span class="status-pill status-completed">Completed</span>
             <?php else: ?>
-                <span class="badge text-bg-primary">Booked</span>
+                <span class="status-pill status-booked">Booked</span>
             <?php endif; ?>
         </td>
     </tr>

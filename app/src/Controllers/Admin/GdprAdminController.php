@@ -4,20 +4,24 @@ declare(strict_types=1);
 namespace App\Controllers\Admin;
 
 use App\Core\Controller;
-use App\Repositories\GdprRequestRepository;
+use App\Repositories\GdprRequestRepositoryInterface;
 
 final class GdprAdminController extends Controller
 {
+    public function __construct(private GdprRequestRepositoryInterface $gdprRequests)
+    {
+    }
+
+    private function requireAdmin(): void
+    {
+        $this->requireRole('admin');
+    }
+
     public function index(): string
     {
-        $user = $this->requireLogin();
-        if (($user['role'] ?? '') !== 'admin') {
-            http_response_code(403);
-            return $this->render('errors/403', ['title' => 'Forbidden']);
-        }
+        $this->requireAdmin();
 
-        $repo = new GdprRequestRepository();
-        $requests = $repo->allWithUsers();
+        $requests = $this->gdprRequests->allWithUsers();
 
         return $this->render('admin/gdpr/index', [
             'title' => 'Admin - GDPR Requests',
@@ -29,11 +33,7 @@ final class GdprAdminController extends Controller
 
     public function process(string $id): string
     {
-        $user = $this->requireLogin();
-        if (($user['role'] ?? '') !== 'admin') {
-            http_response_code(403);
-            return $this->render('errors/403', ['title' => 'Forbidden']);
-        }
+        $this->requireAdmin();
 
         $this->requireCsrf();
 
@@ -43,8 +43,7 @@ final class GdprAdminController extends Controller
             return $this->render('errors/404', ['title' => 'GDPR request not found']);
         }
 
-        $repo = new GdprRequestRepository();
-        $ok = $repo->markProcessed($idInt);
+        $ok = $this->gdprRequests->markProcessed($idInt);
 
         if ($ok) {
             $this->flash('success', 'GDPR request marked as processed.');

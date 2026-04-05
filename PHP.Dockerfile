@@ -13,3 +13,7 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /app
 
+# Copy composer files and install dependencies
+COPY app/composer.json ./
+RUN composer install --no-dev --optimize-autoloader
+

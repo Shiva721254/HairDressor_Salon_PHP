@@ -5,18 +5,38 @@ declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use App\Core\Env;
-use FastRoute\RouteCollector;
-use function FastRoute\simpleDispatcher;
+use App\Core\Container;
+use App\Repositories\AppointmentRepository;
+use App\Repositories\AppointmentRepositoryInterface;
+use App\Repositories\AvailabilityRepository;
+use App\Repositories\AvailabilityRepositoryInterface;
+use App\Repositories\GdprRequestRepositoryInterface;
+use App\Repositories\HairdresserRepository;
+use App\Repositories\HairdresserRepositoryInterface;
+use App\Repositories\ServiceRepository;
+use App\Repositories\ServiceRepositoryInterface;
+use App\Repositories\UserRepositoryInterface;
+use App\Repositories\GdprRequestRepository;
+use App\Repositories\UserRepository;
 
 // --------------------------------------------------
 // Start session (needed for auth later)
 // --------------------------------------------------
 session_start();
 Env::load(__DIR__ . '/../.env');
+
+$container = new Container();
+$container->bind(UserRepositoryInterface::class, UserRepository::class);
+$container->bind(AppointmentRepositoryInterface::class, AppointmentRepository::class);
+$container->bind(AvailabilityRepositoryInterface::class, AvailabilityRepository::class);
+$container->bind(HairdresserRepositoryInterface::class, HairdresserRepository::class);
+$container->bind(ServiceRepositoryInterface::class, ServiceRepository::class);
+$container->bind(GdprRequestRepositoryInterface::class, GdprRequestRepository::class);
 // --------------------------------------------------
 // Define routes
 // --------------------------------------------------
-$dispatcher = simpleDispatcher(function (RouteCollector $r) {
+$dispatcherFactory = 'FastRoute\\simpleDispatcher';
+$dispatcher = $dispatcherFactory(function ($r) {
     // ==================================================
     // PUBLIC PAGES
     // ==================================================
@@ -25,6 +45,10 @@ $dispatcher = simpleDispatcher(function (RouteCollector $r) {
     // ==================================================
     // AUTHENTICATION
     // ==================================================
+    $r->addRoute('GET',  '/admin/login',  ['App\Controllers\AuthController', 'showAdminLogin']);
+    $r->addRoute('POST', '/admin/login',  ['App\Controllers\AuthController', 'adminLogin']);
+    $r->addRoute('GET',  '/staff/login',  ['App\Controllers\AuthController', 'showStaffLogin']);
+    $r->addRoute('POST', '/staff/login',  ['App\Controllers\AuthController', 'staffLogin']);
     $r->addRoute('GET',  '/login',  ['App\Controllers\AuthController', 'showLogin']);
     $r->addRoute('POST', '/login',  ['App\Controllers\AuthController', 'login']);
     $r->addRoute('POST', '/logout', ['App\Controllers\AuthController', 'logout']);
@@ -65,7 +89,26 @@ $dispatcher = simpleDispatcher(function (RouteCollector $r) {
     $r->addRoute('POST', '/appointments/{id:\d+}/cancel',   ['App\Controllers\AppointmentController', 'cancel']);
     $r->addRoute('POST', '/appointments/{id:\d+}/complete', ['App\Controllers\AppointmentController', 'complete']);
 
+    // Admin - Appointment CRUD
+    $r->addRoute('GET',  '/admin/appointments/new',           ['App\Controllers\AppointmentController', 'adminCreate']);
+    $r->addRoute('POST', '/admin/appointments',               ['App\Controllers\AppointmentController', 'adminStore']);
+    $r->addRoute('GET',  '/admin/appointments/{id:\d+}/edit', ['App\Controllers\AppointmentController', 'adminEdit']);
+    $r->addRoute('POST', '/admin/appointments/{id:\d+}',      ['App\Controllers\AppointmentController', 'adminUpdate']);
+    $r->addRoute('POST', '/admin/appointments/{id:\d+}/delete', ['App\Controllers\AppointmentController', 'adminDelete']);
+
     $r->addRoute('GET', '/api/slots', ['App\Controllers\AppointmentController', 'slots']);
+    $r->addRoute('GET', '/api/availability', ['App\Controllers\AppointmentController', 'availabilityApi']);
+
+    // Staff - own schedule only
+    $r->addRoute('GET',  '/staff/appointments', ['App\Controllers\StaffController', 'appointments']);
+    $r->addRoute('GET',  '/staff/availability', ['App\Controllers\StaffController', 'availability']);
+    $r->addRoute('POST', '/staff/availability', ['App\Controllers\StaffController', 'storeWeeklyAvailability']);
+    $r->addRoute('POST', '/staff/availability/{id:\d+}/update', ['App\Controllers\StaffController', 'updateWeeklyAvailability']);
+    $r->addRoute('POST', '/staff/availability/{id:\d+}/delete', ['App\Controllers\StaffController', 'deleteWeeklyAvailability']);
+    $r->addRoute('POST', '/staff/overview/adjust', ['App\Controllers\StaffController', 'adjustOverview']);
+    $r->addRoute('POST', '/staff/overview/{slotId:\d+}/clear', ['App\Controllers\StaffController', 'clearOverviewAdjustment']);
+    $r->addRoute('POST', '/staff/unavailability', ['App\Controllers\StaffController', 'storeBlockedSlot']);
+    $r->addRoute('POST', '/staff/unavailability/{id:\d+}/delete', ['App\Controllers\StaffController', 'deleteBlockedSlot']);
 
 
     // ==================================================
@@ -96,9 +139,18 @@ $dispatcher = simpleDispatcher(function (RouteCollector $r) {
     $r->addRoute('POST', '/admin/availability/{id:\d+}',      ['App\Controllers\Admin\AvailabilityAdminController', 'update']);
     $r->addRoute('POST', '/admin/availability/{id:\d+}/delete', ['App\Controllers\Admin\AvailabilityAdminController', 'delete']);
 
+    // Admin - Staff Management
+    $r->addRoute('GET',  '/admin/staff',               ['App\Controllers\Admin\StaffAdminController', 'index']);
+    $r->addRoute('GET',  '/admin/staff/new',           ['App\Controllers\Admin\StaffAdminController', 'create']);
+    $r->addRoute('POST', '/admin/staff',               ['App\Controllers\Admin\StaffAdminController', 'store']);
+    $r->addRoute('GET',  '/admin/staff/{id:\d+}/edit', ['App\Controllers\Admin\StaffAdminController', 'edit']);
+    $r->addRoute('POST', '/admin/staff/{id:\d+}',      ['App\Controllers\Admin\StaffAdminController', 'update']);
+    $r->addRoute('POST', '/admin/staff/{id:\d+}/delete', ['App\Controllers\Admin\StaffAdminController', 'delete']);
+
     // Admin - GDPR Requests
     $r->addRoute('GET', '/admin/gdpr-requests', ['App\Controllers\Admin\GdprAdminController', 'index']);
     $r->addRoute('POST', '/admin/gdpr-requests/{id:\d+}/process', ['App\Controllers\Admin\GdprAdminController', 'process']);
+    $r->addRoute('GET', '/admin/clients', ['App\Controllers\Admin\ClientAdminController', 'index']);
 });
 
 // --------------------------------------------------
@@ -130,17 +182,12 @@ try {
     $routeInfo = $dispatcher->dispatch($httpMethod, $uri);
 
     switch ($routeInfo[0]) {
-        case FastRoute\Dispatcher::NOT_FOUND:
+        case 0: // FastRoute\Dispatcher::NOT_FOUND
             http_response_code(404);
             echo '404 - Page not found';
             break;
 
-        case FastRoute\Dispatcher::METHOD_NOT_ALLOWED:
-            http_response_code(405);
-            echo '405 - Method not allowed';
-            break;
-
-        case FastRoute\Dispatcher::FOUND:
+        case 1: // FastRoute\Dispatcher::FOUND
             [$controllerClass, $method] = $routeInfo[1];
             $vars = $routeInfo[2];
 
@@ -148,13 +195,18 @@ try {
                 throw new RuntimeException("Controller not found: $controllerClass");
             }
 
-            $controller = new $controllerClass();
+            $controller = $container->make($controllerClass);
 
             if (!method_exists($controller, $method)) {
                 throw new RuntimeException("Method not found: $method");
             }
 
             echo $controller->$method(...array_values($vars));
+            break;
+
+        case 2: // FastRoute\Dispatcher::METHOD_NOT_ALLOWED
+            http_response_code(405);
+            echo '405 - Method not allowed';
             break;
     }
 } catch (Throwable $e) {

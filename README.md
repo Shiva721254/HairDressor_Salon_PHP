@@ -1,348 +1,126 @@
-💇 Hairdresser Salon Appointment System
+Hairdresser Salon Appointment System
 
 PHP MVC Application
 
-📌 Project Overview
+Project Overview
 
-This web application is a Hairdresser Salon management system that allows:
+This project is a Hairdresser Salon booking and management system built with PHP (MVC), MariaDB, JavaScript, and Docker.
 
-Clients to browse hairdressers and services and book appointments
+It supports 3 roles:
+- Admin
+- Staff (Hairdresser)
+- Client
 
-Administrators to manage hairdressers, services, availability, and appointments
+Main features:
+- User authentication and role-based access
+- Service and hairdresser management
+- Appointment booking with duration-based conflict prevention
+- Weekly availability and date-specific unavailability management
+- Profile updates and GDPR request handling
 
-The system to dynamically calculate availability and prevent double bookings
+Run With Docker
 
-The project is built with scalability, maintainability, and security in mind and follows professional web-development practices.
+From project root:
 
-🧱 Architecture (MVC)
-
-This project follows the Model–View–Controller (MVC) architectural pattern.
-
-Model
-
-Handles database access and business logic
-
-Implemented using Repository classes (AppointmentRepository, AvailabilityRepository, etc.)
-
-Business rules such as slot calculation and overlap prevention are encapsulated here
-
-View
-
-PHP templates located in app/Views/
-
-Rendered through a layout-based system for consistent UI
-
-Contains JavaScript for dynamic UI updates (no page reloads)
-
-Controller
-
-Handles HTTP requests and responses
-
-Performs validation and authorization
-
-Calls repositories and returns HTML or JSON responses
-
-Key Architectural Decisions
-
-Single Front Controller (public/index.php)
-
-FastRoute for routing
-
-Views are not directly accessible from the browser
-
-Controllers never contain raw SQL
-
-Clear separation of concerns
-
-Reference files:
-- Routing entry point: `app/public/index.php`
-- Controllers: `app/src/Controllers/*`
-- Repositories (data access): `app/src/Repositories/*`
-- Views & layout: `app/views/*` and `app/views/layouts/main.php`
-
-🐳 Docker Setup
-
-The application runs fully inside Docker containers.
-
-Services Used
-
-PHP 8 (FPM) – Application runtime
-
-Nginx – Web server
-
-MariaDB – Database
-
-phpMyAdmin – Database management (development only)
-
-Prerequisites
-
-Docker Desktop (Windows/macOS) or Docker Engine (Linux)
-
-▶️ Running the Project
-
-From the project root:
-
+```bash
 docker compose up --build
-
-Access Points
-
-Web application:
-👉 http://localhost
-
-phpMyAdmin:
-👉 http://localhost:8080
-
-Database Credentials (Development)
-
-Host: mariadb
-
-Database: developmentdb
-
-Username: developer
-
-Password: secret123
-
-📌 Database initialization scripts are located in:
-app/database/init/
-They are executed automatically on first run.
-
-If your database already exists, run the GDPR migration manually:
-- `app/database/init/003_gdpr_requests.sql`
-
-📁 Project Structure
-
-app/
-
-├── public/
-
-│   ├── index.php  
-          # Front controller
-│   └── assets/
-
-│       └── js/
-
-│           └── app.js
-
-│
-├── src/
-
-│   ├── Controllers/
-
-│   ├── Core/
-
-│   ├── Repositories/
-
-│   ├── Services/
-
-│
-├── Views/
-
-│   ├── layouts/
-
-│   │   └── main.php
-
-│   ├── appointments/
-
-│   ├── admin/
-
-│   ├── hairdressers/
-
-│   └── home.php
-
-│
-├── database/
-
-│   └── init/
-
-│       ├── 001_schema.sql
-
-│       └── 002_seed.sql
-│
-
-docker-compose.yml
-
-nginx.conf
-
-PHP.Dockerfile
-
-README.md
-
-
-🔐 Security Considerations
-
-The application implements multiple security measures:
-
-Centralized routing via front controller
-
-PDO prepared statements (SQL injection prevention)
-
-Output escaping using htmlspecialchars() (XSS prevention)
-
-Server-side validation for all user input
-
-Session-based authentication
-
-Role-based authorization (admin vs client)
-
-CSRF protection implemented for all state-changing POST forms
-
-Passwords hashed using password_hash() and verified with password_verify()
-
-Reference files:
-- Session + auth checks: `app/src/Core/Controller.php`, `app/src/Controllers/AuthController.php`
-- Profile update: `app/src/Controllers/ProfileController.php` and `app/views/auth/profile.php`
-- Password hashing/verification: `app/src/Controllers/AuthController.php`
-- Prepared statements: `app/src/Repositories/*`
-- CSRF helpers: `app/src/Core/Controller.php` and POST forms in `app/views/*`
-- Output escaping: `app/views/*`
-
-🔌 API Endpoints (JSON)
-
-The application exposes JSON API endpoints used by JavaScript.
-
-Examples
-
-GET /api/slots
-Returns available appointment time slots in JSON format
-
-GET /api/hairdressers/{id}/availability
-Returns weekly working days for a hairdresser (0–6)
-
-Reference files:
-- Routes: `app/public/index.php`
-- JSON responses: `app/src/Controllers/AppointmentController.php` and `app/src/Controllers/HairdresserController.php`
-
-These endpoints are consumed asynchronously using fetch() and update the UI without page reloads.
-
-🧠 JavaScript Functionality
-
-JavaScript is used to enhance usability and interactivity:
-
-Appointment slots are loaded dynamically via API calls
-
-Time dropdown updates without page reload
-
-Invalid dates (non-working days) are blocked in real time
-
-API responses are processed as JSON
-
-UI feedback is shown immediately for errors or availability
-
-Reference files:
-- Slot loading (fetch + JSON): `app/views/appointments/create.php` and `app/public/assets/js/app.js`
-
-🎨 CSS & UI
-
-Bootstrap 5 is used as the CSS framework
-
-Responsive layout using Bootstrap grid system
-
-Consistent styling via layout templates
-
-Visual feedback via hover and focus states
-
-Basic UI transitions improve usability
-
-Reference files:
-- Bootstrap + layout: `app/views/layouts/main.php`
-- Custom transitions: `app/public/assets/css/app.css`
-
-♿ Accessibility (WCAG)
-
-Accessibility considerations include:
-
-Semantic HTML (header, nav, main, form)
-
-Proper <label> usage for all form fields
-
-Keyboard-accessible navigation
-
-Responsive design for different screen sizes
-
-Dynamic updates use aria-live to notify screen readers
-
-Clear error and success feedback messages
-
-Reference files:
-- Semantic layout + skip link: `app/views/layouts/main.php`
-- Labeled form fields + aria-live updates: `app/views/appointments/create.php`
-- Flash messages & alerts: `app/views/layouts/main.php`
-
-📜 GDPR Considerations
-
-The application respects GDPR principles:
-
-Only necessary user data is stored (email, appointments)
-
-Passwords are securely hashed
-
-No tracking or analytics cookies are used
-
-Sessions are used strictly for functionality
-
-Data can be extended to support deletion upon user request
-
-Database access is restricted and secured
-
-Reference files:
-- Data minimization schema: `app/database/init/001_schema.sql`
-- Session usage: `app/public/index.php` and `app/src/Core/Controller.php`
-- GDPR requests + export: `app/src/Controllers/ProfileController.php`, `app/src/Repositories/GdprRequestRepository.php`, `app/views/auth/profile.php`
-- GDPR admin review: `app/src/Controllers/Admin/GdprAdminController.php` and `app/views/admin/gdpr/index.php`
-- GDPR request status processing: `app/src/Repositories/GdprRequestRepository.php`
-
-🚀 Current Status
-
-✅ Docker setup complete
-✅ MVC architecture implemented
-✅ Authentication (login/register)
-✅ Role-based access (admin / client)
-✅ Hairdresser availability management
-✅ Appointment booking with availability checks
-✅ Admin CRUD management
-✅ User profile update (email/password)
-✅ Admin appointment filters (hairdresser/date)
-✅ GDPR data export + deletion request flow
-✅ GDPR admin requests page
-✅ GDPR request status tracking (pending/processed)
-✅ JSON API endpoints
-✅ JavaScript-driven dynamic UI
-✅ Security & accessibility considerations applied
-
-📦 Technologies Used
-
-PHP 8+
-
-Nginx
-
-MariaDB
-
-Docker & Docker Compose
-
-FastRoute
-
-Bootstrap 5
-
-JavaScript (Fetch API)
-
-👤 Author
-
-Shiva Lamichhane
-Web Development Student
-Project: Hairdresser Salon PHP MVC Application
-
-✅ Rubric Status (Internal Check)
-
-CSS: ✅
-
-Sessions: ✅
-
-Security: ✅
-
-MVC: ✅
-
-API: ✅
-
-JavaScript: ✅
-
-Accessibility & GDPR: ✅
+```
+
+Access:
+- App: http://localhost
+- phpMyAdmin: http://localhost:8080
+
+Demo Accounts
+
+- Admin: admin@salon.test / Admin123!
+- Staff: staff@salon.test / Staff123!
+- Client: client@salon.test / Client123!
+
+Tech Stack
+
+- PHP 8 (FPM)
+- Nginx
+- MariaDB
+- phpMyAdmin (dev)
+- JavaScript (vanilla)
+- FastRoute
+
+Project Structure
+
+```text
+.
+|-- docker-compose.yml
+|-- nginx.conf
+|-- PHP.Dockerfile
+|-- README.md
+`-- app/
+    |-- composer.json
+    |-- database/
+    |   `-- init/
+    |       |-- 001_schema.sql
+    |       |-- 002_seed.sql
+    |       |-- 003_gdpr_requests.sql
+    |       |-- 004_demo_users.sql
+    |       |-- 005_staff_role_unavailability.sql
+    |       |-- 006_user_name.sql
+    |       `-- 007_business_hours_availability.sql
+    |-- public/
+    |   |-- index.php
+    |   `-- assets/
+    |-- src/
+    |   |-- Controllers/
+    |   |-- Core/
+    |   `-- Repositories/
+    `-- views/
+```
+
+Database Notes
+
+Database scripts are in app/database/init/.
+They run automatically on first container startup.
+
+Rubric Evidence (Marker Checklist)
+
+1. CSS
+- Bootstrap integration: app/views/layouts/main.php
+- Custom styling and responsive UI: app/public/assets/css/app.css
+
+2. Sessions
+- Session bootstrap: app/public/index.php
+- Session user and role guards: app/src/Core/Controller.php
+- Login/logout session handling: app/src/Controllers/AuthController.php
+
+3. Security
+- CSRF helpers and validation: app/src/Core/Controller.php
+- CSRF-protected forms: app/views/auth/login.php, app/views/auth/profile.php, app/views/layouts/main.php
+- Password hash/verify: app/src/Controllers/AuthController.php, app/src/Controllers/ProfileController.php
+- Prepared statements (PDO): app/src/Repositories/UserRepository.php, app/src/Repositories/AppointmentRepository.php, app/src/Repositories/GdprRequestRepository.php
+- Escaped output in templates: app/views/layouts/main.php, app/views/appointments/index.php
+
+4. MVC and Architecture
+- Front controller + routing: app/public/index.php
+- Controllers layer: app/src/Controllers/
+- Repository layer: app/src/Repositories/
+- Views layer: app/views/
+- Dependency injection container: app/src/Core/Container.php
+
+5. API
+- API routes: app/public/index.php
+- JSON endpoint implementation: app/src/Controllers/AppointmentController.php
+- JSON hairdresser dates endpoint: app/src/Controllers/HairdresserController.php
+
+6. JavaScript
+- Async slot loading and interactive forms: app/public/assets/js/app.js
+- Booking page JS usage: app/views/appointments/create.php
+
+7. Legal and Accessibility
+- GDPR export and deletion request flow: app/src/Controllers/ProfileController.php
+- GDPR admin processing: app/src/Controllers/Admin/GdprAdminController.php
+- Accessibility skip link and semantic main landmark: app/views/layouts/main.php
+
+Submission Notes
+
+This repository is prepared for submission:
+- Temporary local helper/debug files removed
+- Dockerized setup included
+- README cleaned and simplified with clear evidence mapping

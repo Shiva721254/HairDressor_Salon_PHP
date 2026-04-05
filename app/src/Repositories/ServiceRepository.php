@@ -6,7 +6,7 @@ namespace App\Repositories;
 use App\Core\Db;
 use PDO;
 
-final class ServiceRepository
+final class ServiceRepository implements ServiceRepositoryInterface
 {
     private PDO $pdo;
 

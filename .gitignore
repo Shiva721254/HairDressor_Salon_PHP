@@ -35,6 +35,11 @@ app/var/
 .phpunit.result.cache
 coverage/
 
+# Local smoke-test artifacts
+smoke_*
+staff_headers.txt
+staff_immediate_vars.txt
+
 # Node (if present)
 node_modules/
 

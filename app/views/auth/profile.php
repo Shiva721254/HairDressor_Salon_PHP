@@ -20,6 +20,21 @@
     <?= $this->csrfField() ?>
 
     <div class="mb-3">
+        <label class="form-label" for="name">Name</label>
+        <input
+            class="form-control"
+            id="name"
+            name="name"
+            type="text"
+            value="<?= htmlspecialchars((string)($old['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+            required
+            minlength="2"
+            maxlength="100"
+            autocomplete="name"
+        >
+    </div>
+
+    <div class="mb-3">
         <label class="form-label" for="email">Email</label>
         <input
             class="form-control"

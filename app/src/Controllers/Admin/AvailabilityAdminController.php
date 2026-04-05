@@ -4,53 +4,79 @@ declare(strict_types=1);
 namespace App\Controllers\Admin;
 
 use App\Core\Controller;
-use App\Repositories\AvailabilityRepository;
-use App\Repositories\HairdresserRepository;
+use App\Repositories\AvailabilityRepositoryInterface;
+use App\Repositories\HairdresserRepositoryInterface;
 
 final class AvailabilityAdminController extends Controller
 {
-    private function ensureAdminOrForbidden(): ?array
-    {
-        $user = $this->requireLogin();
+    public function __construct(
+        private AvailabilityRepositoryInterface $availability,
+        private HairdresserRepositoryInterface $hairdressers
+    ) {
+    }
 
-        if (($user['role'] ?? '') !== 'admin') {
-            http_response_code(403);
-            // Return null means caller should return forbidden view.
-            return null;
+    private function requireAdmin(): void
+    {
+        $this->requireRole('admin');
+    }
+
+    /**
+     * @return array{hairdresser_id:int,day_of_week:int,start_time:string,end_time:string}
+     */
+    private function readAvailabilityInput(): array
+    {
+        return [
+            'hairdresser_id' => (int)($_POST['hairdresser_id'] ?? 0),
+            'day_of_week' => (int)($_POST['day_of_week'] ?? 0),
+            'start_time' => trim((string)($_POST['start_time'] ?? '')),
+            'end_time' => trim((string)($_POST['end_time'] ?? '')),
+        ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function validateAvailabilityInput(
+        int $hairdresserId,
+        int $dayOfWeek,
+        string $startTime,
+        string $endTime,
+        ?int $excludeAvailabilityId = null
+    ): array {
+        $errors = [];
+
+        if ($hairdresserId <= 0) $errors[] = 'Select a hairdresser.';
+        if ($dayOfWeek < 1 || $dayOfWeek > 7) $errors[] = 'Select a valid day of week (1..7).';
+
+        $st = \DateTimeImmutable::createFromFormat('H:i', $startTime);
+        if ($st === false || $st->format('H:i') !== $startTime) $errors[] = 'Start time must be HH:MM.';
+
+        $et = \DateTimeImmutable::createFromFormat('H:i', $endTime);
+        if ($et === false || $et->format('H:i') !== $endTime) $errors[] = 'End time must be HH:MM.';
+
+        if (empty($errors) && $startTime >= $endTime) {
+            $errors[] = 'End time must be after start time.';
         }
 
-        return $user;
-    }
-
-    private function ensureCsrfToken(): void
-    {
-        if (empty($_SESSION['csrf_token']) || !is_string($_SESSION['csrf_token'])) {
-            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        if (empty($errors) && $this->hairdressers->findById($hairdresserId) === null) {
+            $errors[] = 'Selected hairdresser not found.';
         }
-    }
 
-    private function isValidCsrf(): bool
-    {
-        $this->ensureCsrfToken();
+        if (
+            empty($errors)
+            && $this->availability->overlapsWindow($hairdresserId, $dayOfWeek, $startTime, $endTime, $excludeAvailabilityId)
+        ) {
+            $errors[] = 'This availability overlaps with an existing window for that hairdresser/day.';
+        }
 
-        $token   = (string)($_POST['csrf_token'] ?? '');
-        $session = (string)($_SESSION['csrf_token'] ?? '');
-
-        return $token !== '' && $session !== '' && hash_equals($session, $token);
-    }
-
-    private function renderForbidden(): string
-    {
-        return $this->render('errors/403', ['title' => 'Forbidden']);
+        return $errors;
     }
 
     public function index(): string
     {
-        $user = $this->ensureAdminOrForbidden();
-        if ($user === null) return $this->renderForbidden();
+        $this->requireAdmin();
 
-        $repo = new AvailabilityRepository();
-        $rows = $repo->allWithHairdresserNames();
+        $rows = $this->availability->allWithHairdresserNames();
 
         // Group per hairdresser for nicer UI
         $grouped = [];
@@ -78,16 +104,12 @@ final class AvailabilityAdminController extends Controller
 
     public function create(): string
     {
-        $user = $this->ensureAdminOrForbidden();
-        if ($user === null) return $this->renderForbidden();
-
-        $this->ensureCsrfToken();
-
-        $hairRepo = new HairdresserRepository();
+        $this->requireAdmin();
+        $this->csrfToken();
 
         return $this->render('admin/availability/create', [
             'title' => 'Add Availability',
-            'hairdressers' => $hairRepo->all(),
+            'hairdressers' => $this->hairdressers->all(),
             'errors' => [],
             'old' => [
                 'hairdresser_id' => '',
@@ -100,51 +122,22 @@ final class AvailabilityAdminController extends Controller
 
     public function store(): string
     {
-        $user = $this->ensureAdminOrForbidden();
-        if ($user === null) return $this->renderForbidden();
+        $this->requireAdmin();
+        $this->requireCsrf();
 
-        if (!$this->isValidCsrf()) {
-            http_response_code(403);
-            return $this->render('errors/403', ['title' => 'Invalid CSRF token']);
-        }
+        $input = $this->readAvailabilityInput();
+        $hairdresserId = $input['hairdresser_id'];
+        $dayOfWeek = $input['day_of_week'];
+        $startTime = $input['start_time'];
+        $endTime = $input['end_time'];
 
-        $hairdresserId = (int)($_POST['hairdresser_id'] ?? 0);
-        $dayOfWeek     = (int)($_POST['day_of_week'] ?? 0);
-        $startTime     = trim((string)($_POST['start_time'] ?? ''));
-        $endTime       = trim((string)($_POST['end_time'] ?? ''));
-
-        $errors = [];
-
-        if ($hairdresserId <= 0) $errors[] = 'Select a hairdresser.';
-        if ($dayOfWeek < 1 || $dayOfWeek > 7) $errors[] = 'Select a valid day of week (1..7).';
-
-        $st = \DateTimeImmutable::createFromFormat('H:i', $startTime);
-        if ($st === false || $st->format('H:i') !== $startTime) $errors[] = 'Start time must be HH:MM.';
-
-        $et = \DateTimeImmutable::createFromFormat('H:i', $endTime);
-        if ($et === false || $et->format('H:i') !== $endTime) $errors[] = 'End time must be HH:MM.';
-
-        if (empty($errors) && $startTime >= $endTime) {
-            $errors[] = 'End time must be after start time.';
-        }
-
-        $hairRepo = new HairdresserRepository();
-        if (empty($errors) && $hairRepo->findById($hairdresserId) === null) {
-            $errors[] = 'Selected hairdresser not found.';
-        }
-
-        $repo = new AvailabilityRepository();
-
-        // Prevent overlapping windows for same hairdresser/day
-        if (empty($errors) && $repo->overlapsWindow($hairdresserId, $dayOfWeek, $startTime, $endTime)) {
-            $errors[] = 'This availability overlaps with an existing window for that hairdresser/day.';
-        }
+        $errors = $this->validateAvailabilityInput($hairdresserId, $dayOfWeek, $startTime, $endTime);
 
         if ($errors) {
             http_response_code(422);
             return $this->render('admin/availability/create', [
                 'title' => 'Add Availability',
-                'hairdressers' => $hairRepo->all(),
+                'hairdressers' => $this->hairdressers->all(),
                 'errors' => $errors,
                 'old' => [
                     'hairdresser_id' => (string)$hairdresserId,
@@ -155,7 +148,7 @@ final class AvailabilityAdminController extends Controller
             ]);
         }
 
-        $repo->create($hairdresserId, $dayOfWeek, $startTime, $endTime);
+        $this->availability->create($hairdresserId, $dayOfWeek, $startTime, $endTime);
 
         $this->flash('success', 'Availability window created.');
         return $this->redirect('/admin/availability');
@@ -163,10 +156,8 @@ final class AvailabilityAdminController extends Controller
 
     public function edit(string $id): string
     {
-        $user = $this->ensureAdminOrForbidden();
-        if ($user === null) return $this->renderForbidden();
-
-        $this->ensureCsrfToken();
+        $this->requireAdmin();
+        $this->csrfToken();
 
         $aid = (int)$id;
         if ($aid <= 0) {
@@ -174,19 +165,16 @@ final class AvailabilityAdminController extends Controller
             return $this->render('errors/404', ['title' => 'Availability not found']);
         }
 
-        $repo = new AvailabilityRepository();
-        $row = $repo->findByIdWithHairdresserName($aid);
+        $row = $this->availability->findByIdWithHairdresserName($aid);
 
         if ($row === null) {
             http_response_code(404);
             return $this->render('errors/404', ['title' => 'Availability not found']);
         }
 
-        $hairRepo = new HairdresserRepository();
-
         return $this->render('admin/availability/edit', [
             'title' => 'Edit Availability',
-            'hairdressers' => $hairRepo->all(),
+            'hairdressers' => $this->hairdressers->all(),
             'errors' => [],
             'row' => $row,
         ]);
@@ -194,13 +182,8 @@ final class AvailabilityAdminController extends Controller
 
     public function update(string $id): string
     {
-        $user = $this->ensureAdminOrForbidden();
-        if ($user === null) return $this->renderForbidden();
-
-        if (!$this->isValidCsrf()) {
-            http_response_code(403);
-            return $this->render('errors/403', ['title' => 'Invalid CSRF token']);
-        }
+        $this->requireAdmin();
+        $this->requireCsrf();
 
         $aid = (int)$id;
         if ($aid <= 0) {
@@ -208,42 +191,20 @@ final class AvailabilityAdminController extends Controller
             return $this->render('errors/404', ['title' => 'Availability not found']);
         }
 
-        $repo = new AvailabilityRepository();
-        $existing = $repo->findByIdWithHairdresserName($aid);
+        $existing = $this->availability->findByIdWithHairdresserName($aid);
 
         if ($existing === null) {
             http_response_code(404);
             return $this->render('errors/404', ['title' => 'Availability not found']);
         }
 
-        $hairdresserId = (int)($_POST['hairdresser_id'] ?? 0);
-        $dayOfWeek     = (int)($_POST['day_of_week'] ?? 0);
-        $startTime     = trim((string)($_POST['start_time'] ?? ''));
-        $endTime       = trim((string)($_POST['end_time'] ?? ''));
+        $input = $this->readAvailabilityInput();
+        $hairdresserId = $input['hairdresser_id'];
+        $dayOfWeek = $input['day_of_week'];
+        $startTime = $input['start_time'];
+        $endTime = $input['end_time'];
 
-        $errors = [];
-
-        if ($hairdresserId <= 0) $errors[] = 'Select a hairdresser.';
-        if ($dayOfWeek < 1 || $dayOfWeek > 7) $errors[] = 'Select a valid day of week (1..7).';
-
-        $st = \DateTimeImmutable::createFromFormat('H:i', $startTime);
-        if ($st === false || $st->format('H:i') !== $startTime) $errors[] = 'Start time must be HH:MM.';
-
-        $et = \DateTimeImmutable::createFromFormat('H:i', $endTime);
-        if ($et === false || $et->format('H:i') !== $endTime) $errors[] = 'End time must be HH:MM.';
-
-        if (empty($errors) && $startTime >= $endTime) {
-            $errors[] = 'End time must be after start time.';
-        }
-
-        $hairRepo = new HairdresserRepository();
-        if (empty($errors) && $hairRepo->findById($hairdresserId) === null) {
-            $errors[] = 'Selected hairdresser not found.';
-        }
-
-        if (empty($errors) && $repo->overlapsWindow($hairdresserId, $dayOfWeek, $startTime, $endTime, $aid)) {
-            $errors[] = 'This availability overlaps with an existing window for that hairdresser/day.';
-        }
+        $errors = $this->validateAvailabilityInput($hairdresserId, $dayOfWeek, $startTime, $endTime, $aid);
 
         if ($errors) {
             http_response_code(422);
@@ -256,13 +217,13 @@ final class AvailabilityAdminController extends Controller
 
             return $this->render('admin/availability/edit', [
                 'title' => 'Edit Availability',
-                'hairdressers' => $hairRepo->all(),
+                'hairdressers' => $this->hairdressers->all(),
                 'errors' => $errors,
                 'row' => $existing,
             ]);
         }
 
-        $repo->update($aid, $hairdresserId, $dayOfWeek, $startTime, $endTime);
+        $this->availability->update($aid, $hairdresserId, $dayOfWeek, $startTime, $endTime);
 
         $this->flash('success', 'Availability window updated.');
         return $this->redirect('/admin/availability');
@@ -270,13 +231,8 @@ final class AvailabilityAdminController extends Controller
 
     public function delete(string $id): string
     {
-        $user = $this->ensureAdminOrForbidden();
-        if ($user === null) return $this->renderForbidden();
-
-        if (!$this->isValidCsrf()) {
-            http_response_code(403);
-            return $this->render('errors/403', ['title' => 'Invalid CSRF token']);
-        }
+        $this->requireAdmin();
+        $this->requireCsrf();
 
         $aid = (int)$id;
         if ($aid <= 0) {
@@ -284,8 +240,7 @@ final class AvailabilityAdminController extends Controller
             return $this->render('errors/404', ['title' => 'Availability not found']);
         }
 
-        $repo = new AvailabilityRepository();
-        $repo->delete($aid);
+        $this->availability->delete($aid);
 
         $this->flash('success', 'Availability window deleted.');
         return $this->redirect('/admin/availability');

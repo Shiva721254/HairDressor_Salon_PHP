@@ -1,4 +1,3 @@
-
 <?php /** @var array $services */ ?>
 
 <h1 class="mb-3">Services</h1>

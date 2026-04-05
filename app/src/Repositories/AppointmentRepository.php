@@ -7,13 +7,44 @@ namespace App\Repositories;
 use App\Core\Db;
 use PDO;
 
-final class AppointmentRepository
+final class AppointmentRepository implements AppointmentRepositoryInterface
 {
     private PDO $pdo;
 
     public function __construct()
     {
         $this->pdo = Db::pdo();
+    }
+
+    private function fetchServiceDuration(int $serviceId): int
+    {
+        $stmt = $this->pdo->prepare('SELECT duration_minutes FROM services WHERE id = :sid LIMIT 1');
+        $stmt->execute(['sid' => $serviceId]);
+        return (int)($stmt->fetchColumn() ?: 0);
+    }
+
+    private function overlaps(\DateTimeImmutable $startA, \DateTimeImmutable $endA, \DateTimeImmutable $startB, \DateTimeImmutable $endB): bool
+    {
+        return $startA < $endB && $endA > $startB;
+    }
+
+    /** @return array<int, array{start_time:string,end_time:string}> */
+    private function blockedWindowsForDate(int $hairdresserId, string $dateYmd): array
+    {
+        try {
+            $stmt = $this->pdo->prepare(
+                "SELECT
+                    TIME_FORMAT(start_time, '%H:%i') AS start_time,
+                    TIME_FORMAT(end_time, '%H:%i') AS end_time
+                 FROM unavailability_slots
+                 WHERE hairdresser_id = :hid AND slot_date = :d"
+            );
+            $stmt->execute(['hid' => $hairdresserId, 'd' => $dateYmd]);
+            return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (\Throwable) {
+            // Migration may not be applied yet; keep slot API operational.
+            return [];
+        }
     }
 
     public function existsSlot(int $hairdresserId, string $dateYmd, string $timeHi): bool
@@ -40,23 +71,31 @@ final class AppointmentRepository
      * Returns bookings for a hairdresser on a date with duration.
      * @return array<int, array{start_time:string,duration_minutes:int}>
      */
-    public function bookingsForDate(int $hairdresserId, string $dateYmd): array
+    public function bookingsForDate(int $hairdresserId, string $dateYmd, ?int $excludeAppointmentId = null): array
     {
-        $stmt = $this->pdo->prepare(
-            'SELECT
+        $sql = 'SELECT
+                a.id AS id,
                 TIME_FORMAT(a.appointment_time, "%H:%i") AS start_time,
                 s.duration_minutes AS duration_minutes
              FROM appointments a
              JOIN services s ON s.id = a.service_id
              WHERE a.hairdresser_id = :hid
                AND a.appointment_date = :d
-               AND (a.status IS NULL OR a.status <> "cancelled")'
-        );
+               AND (a.status IS NULL OR a.status <> "cancelled")';
 
-        $stmt->execute([
+        $params = [
             'hid' => $hairdresserId,
             'd'   => $dateYmd,
-        ]);
+        ];
+
+        if ($excludeAppointmentId !== null) {
+            $sql .= ' AND a.id <> :exclude_id';
+            $params['exclude_id'] = $excludeAppointmentId;
+        }
+
+        $stmt = $this->pdo->prepare($sql);
+
+        $stmt->execute($params);
 
         $rows = $stmt->fetchAll();
         foreach ($rows as &$r) {
@@ -164,6 +203,8 @@ final class AppointmentRepository
             SELECT
                 a.id,
                 a.user_id,
+                a.hairdresser_id,
+                a.service_id,
                 a.appointment_date,
                 a.appointment_time,
                 a.status,
@@ -171,6 +212,7 @@ final class AppointmentRepository
                 s.name AS service_name,
                 s.duration_minutes AS duration_minutes,
                 s.price AS price,
+                u.name AS user_name,
                 u.email AS user_email,
                 u.role AS user_role
             FROM appointments a
@@ -200,6 +242,7 @@ final class AppointmentRepository
                 s.name  AS service_name,
                 s.duration_minutes,
                 s.price,
+                u.name AS user_name,
                 u.email AS user_email,
                 u.role  AS user_role
             FROM appointments a
@@ -238,6 +281,46 @@ final class AppointmentRepository
         return $stmt->rowCount() > 0;
     }
 
+    public function updateDetails(
+        int $id,
+        int $hairdresserId,
+        int $serviceId,
+        int $userId,
+        string $dateYmd,
+        string $timeHi,
+        string $status
+    ): bool {
+        $stmt = $this->pdo->prepare(
+            'UPDATE appointments
+             SET hairdresser_id = :hid,
+                 service_id = :sid,
+                 user_id = :uid,
+                 appointment_date = :d,
+                 appointment_time = :t,
+                 status = :status
+             WHERE id = :id'
+        );
+
+        $stmt->execute([
+            'id' => $id,
+            'hid' => $hairdresserId,
+            'sid' => $serviceId,
+            'uid' => $userId,
+            'd' => $dateYmd,
+            't' => $timeHi . ':00',
+            'status' => $status,
+        ]);
+
+        return $stmt->rowCount() > 0;
+    }
+
+    public function deleteById(int $id): bool
+    {
+        $stmt = $this->pdo->prepare('DELETE FROM appointments WHERE id = :id');
+        $stmt->execute(['id' => $id]);
+        return $stmt->rowCount() > 0;
+    }
+
     /**
      * Returns available time slots for a hairdresser on a given date, taking into account:
      * - availability windows
@@ -246,79 +329,102 @@ final class AppointmentRepository
      *
      * @return array<int, string> Example: ["10:00","10:30","11:00"]
      */
-  public function getAvailableSlots(int $hairdresserId, int $serviceId, string $dateYmd): array
-{
-    // 1) Get service duration
-    $stmt = $this->pdo->prepare(
-        'SELECT duration_minutes FROM services WHERE id = :sid LIMIT 1'
-    );
-    $stmt->execute(['sid' => $serviceId]);
-    $duration = (int)($stmt->fetchColumn() ?: 0);
+    public function getAvailableSlots(int $hairdresserId, int $serviceId, string $dateYmd): array
+    {
+        $duration = $this->fetchServiceDuration($serviceId);
 
-    if ($duration <= 0) {
-        return [];
-    }
+        if ($duration <= 0) {
+            return [];
+        }
 
-    // 2) Fetch availability windows for that hairdresser on the weekday of the given date
-    // Schema uses day_of_week (1=Mon ... 7=Sun)
-    $dateObj = new \DateTimeImmutable($dateYmd);
-    $dayOfWeekIso = (int)$dateObj->format('N'); // 1..7
+        $dateObj = new \DateTimeImmutable($dateYmd);
+        $dayOfWeekIso = (int)$dateObj->format('N'); // 1..7
 
-    // 3) Fetch weekly availability
-    $stmt = $this->pdo->prepare('
-        SELECT start_time, end_time
-        FROM availability
-        WHERE hairdresser_id = :hid
-          AND day_of_week = :dow
-        ORDER BY start_time ASC
-    ');
-    $stmt->execute(['hid' => $hairdresserId, 'dow' => $dayOfWeekIso]);
-    $windows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $stmt = $this->pdo->prepare('
+            SELECT start_time, end_time
+            FROM availability
+            WHERE hairdresser_id = :hid
+              AND day_of_week = :dow
+            ORDER BY start_time ASC
+        ');
+        $stmt->execute(['hid' => $hairdresserId, 'dow' => $dayOfWeekIso]);
+        $windows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-    if (!$windows) {
-        return [];
-    }
+        if (!$windows) {
+            return [];
+        }
 
-    // 4) Existing bookings for the selected date
-    $bookings = $this->bookingsForDate($hairdresserId, $dateYmd);
+        $bookings = $this->bookingsForDate($hairdresserId, $dateYmd);
 
-    // 5) Build slots
-    $stepMinutes = 30;
-    $slots = [];
+        $blockedWindows = $this->blockedWindowsForDate($hairdresserId, $dateYmd);
 
-    foreach ($windows as $w) {
-        $start = new \DateTimeImmutable($dateYmd . ' ' . $w['start_time']);
-        $end   = new \DateTimeImmutable($dateYmd . ' ' . $w['end_time']);
+        $stepMinutes = 30;
+        $slots = [];
 
-        for ($t = $start; $t < $end; $t = $t->modify("+{$stepMinutes} minutes")) {
-            $slotStart = $t;
-            $slotEnd   = $t->modify("+{$duration} minutes");
+        foreach ($windows as $w) {
+            $start = new \DateTimeImmutable($dateYmd . ' ' . $w['start_time']);
+            $end   = new \DateTimeImmutable($dateYmd . ' ' . $w['end_time']);
 
-            if ($slotEnd > $end) {
-                break;
+            $businessStart = new \DateTimeImmutable($dateYmd . ' 08:00:00');
+            $businessEnd = new \DateTimeImmutable($dateYmd . ' 17:00:00');
+
+            if ($start < $businessStart) {
+                $start = $businessStart;
+            }
+            if ($end > $businessEnd) {
+                $end = $businessEnd;
             }
 
-            $conflict = false;
-            foreach ($bookings as $b) {
-                $bStart = new \DateTimeImmutable($dateYmd . ' ' . $b['start_time']);
-                $bEnd   = $bStart->modify('+' . (int)$b['duration_minutes'] . ' minutes');
+            if ($start >= $end) {
+                continue;
+            }
 
-                if ($slotStart < $bEnd && $slotEnd > $bStart) {
-                    $conflict = true;
+            for ($t = $start; $t < $end; $t = $t->modify("+{$stepMinutes} minutes")) {
+                $slotStart = $t;
+                $slotEnd   = $t->modify("+{$duration} minutes");
+
+                if ($slotEnd > $end) {
                     break;
                 }
-            }
 
-            if (!$conflict) {
-                $slots[] = $slotStart->format('H:i');
+                $conflict = false;
+
+                foreach ($bookings as $b) {
+                    $bStart = new \DateTimeImmutable($dateYmd . ' ' . $b['start_time']);
+                    $bEnd   = $bStart->modify('+' . (int)$b['duration_minutes'] . ' minutes');
+
+                    if ($this->overlaps($slotStart, $slotEnd, $bStart, $bEnd)) {
+                        $conflict = true;
+                        break;
+                    }
+                }
+
+                if (!$conflict) {
+                    foreach ($blockedWindows as $blocked) {
+                        $blockedStart = \DateTimeImmutable::createFromFormat('Y-m-d H:i', $dateYmd . ' ' . (string)$blocked['start_time']);
+                        $blockedEnd = \DateTimeImmutable::createFromFormat('Y-m-d H:i', $dateYmd . ' ' . (string)$blocked['end_time']);
+
+                        if ($blockedStart === false || $blockedEnd === false) {
+                            continue;
+                        }
+
+                        if ($this->overlaps($slotStart, $slotEnd, $blockedStart, $blockedEnd)) {
+                            $conflict = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!$conflict) {
+                    $slots[] = $slotStart->format('H:i');
+                }
             }
         }
+
+        $slots = array_values(array_unique($slots));
+        sort($slots);
+
+        return $slots;
     }
-
-    $slots = array_values(array_unique($slots));
-    sort($slots);
-
-    return $slots;
-}
 
 }
