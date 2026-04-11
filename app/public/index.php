@@ -183,9 +183,9 @@ try {
 
     switch ($routeInfo[0]) {
         case 0: // FastRoute\Dispatcher::NOT_FOUND
-            http_response_code(404);
-            echo '404 - Page not found';
-            break;
+        http_response_code(404);
+        require __DIR__ . '/../views/errors/404.php';
+        break;
 
         case 1: // FastRoute\Dispatcher::FOUND
             [$controllerClass, $method] = $routeInfo[1];
@@ -205,9 +205,9 @@ try {
             break;
 
         case 2: // FastRoute\Dispatcher::METHOD_NOT_ALLOWED
-            http_response_code(405);
-            echo '405 - Method not allowed';
-            break;
+    http_response_code(405);
+    require __DIR__ . '/../views/errors/404.php';
+    break;
     }
 } catch (Throwable $e) {
     http_response_code(500);

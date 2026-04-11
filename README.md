@@ -1,8 +1,6 @@
 Hairdresser Salon Appointment System
 
-This is my PHP MVC salon booking system for the module submission.
-
-Quick start
+ Starting of the application
 1. From project root, run: docker-compose up
 2. Open http://localhost
 3. Optional DB UI: http://localhost:8080 (phpMyAdmin)
@@ -12,11 +10,6 @@ Demo login credentials
 - Staff: staff@salon.test / Staff123!
 - Client: client@salon.test / Client123!
 
-Submission checklist (required items)
-- Database export included in root: database_export.sql
-- Fully dockerized and runnable with docker-compose up
-- Source code included in project zip: HairDressor_Salon_PHP_submission.zip
-- Special instructions and credentials documented here
 
 Code patterns / framework enhancements
 - Front controller and route table: app/public/index.php
@@ -36,6 +29,10 @@ Security and compliance notes
   - Parameterized PDO queries in repositories (example): app/src/Repositories/UserRepository.php, app/src/Repositories/AppointmentRepository.php
 - Output escaping in templates:
   - Example layout and views use htmlspecialchars: app/views/layouts/main.php
+- Styled error pages:
+  - 404 and 405 errors render a proper styled view instead of plain text: app/public/index.php
+  - 404 view: app/views/errors/404.php
+  - 403 view: app/views/errors/403.php
 
 GDPR work
 - User data export endpoint: app/src/Controllers/ProfileController.php (export)
@@ -50,13 +47,21 @@ WCAG/accessibility work
   - app/views/auth/login.php
   - app/views/staff/availability.php
 
-Project structure (short)
+JavaScript / API work
+- Slot loading: JavaScript fetches /api/slots on the booking form and populates
+  available times dynamically without page reload: app/public/assets/js/app.js
+- Hairdresser availability: JavaScript fetches /api/hairdressers/{id}/availability
+  on the hairdresser detail page and renders working days dynamically without
+  page reload: app/views/hairdressers/show.php
+  - API endpoint: app/src/Controllers/HairdresserController.php (availability method)
+
+Project structure 
 - docker-compose.yml, PHP.Dockerfile, nginx.conf
 - app/public (entry + static assets)
 - app/src (Controllers, Core, Repositories, Services)
 - app/views (UI templates)
 - app/database (migrations, seeds)
 
-Notes for marker
+
 - Docker services: nginx, php-fpm, mariadb, phpmyadmin
 - Database is initialized automatically by MariaDB entrypoint using ordered SQL mounts from docker-compose.yml.
