@@ -96,6 +96,8 @@ final class AuthController extends Controller
             );
         }
 
+        session_regenerate_id(true);
+
         $_SESSION['user'] = [
             'id' => (int)$user['id'],
             'name' => (string)($user['name'] ?? ''),
@@ -138,6 +140,7 @@ final class AuthController extends Controller
         $this->requireCsrf();
 
         unset($_SESSION['user']);
+        session_regenerate_id(true);
         $this->flash('success', 'Logged out.');
         return $this->redirect('/');
     }

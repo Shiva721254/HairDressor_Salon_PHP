@@ -56,7 +56,7 @@ $dispatcher = $dispatcherFactory(function ($r) {
     $r->addRoute('POST', '/register',  ['App\Controllers\AuthController', 'register']);
     $r->addRoute('GET',  '/profile',   ['App\Controllers\ProfileController', 'show']);
     $r->addRoute('POST', '/profile',   ['App\Controllers\ProfileController', 'update']);
-    $r->addRoute('GET',  '/profile/export', ['App\Controllers\ProfileController', 'export']);
+    $r->addRoute('POST', '/profile/export', ['App\Controllers\ProfileController', 'export']);
     $r->addRoute('POST', '/profile/delete', ['App\Controllers\ProfileController', 'requestDeletion']);
 
     // ==================================================

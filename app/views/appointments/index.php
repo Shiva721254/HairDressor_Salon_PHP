@@ -191,12 +191,12 @@ function statusBadge(string $status): string
                     <td>
                         <?= htmlspecialchars((string)($a['service_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
                         <span class="text-muted">
-                            (<?= $dur ?> min, €<?= number_format($price, 2) ?>)
+                            (<?= $dur ?> min, EUR <?= number_format($price, 2) ?>)
                         </span>
                     </td>
 
                     <td>
-                        <?= htmlspecialchars((string)($a['user_email'] ?? '—'), ENT_QUOTES, 'UTF-8') ?>
+                        <?= htmlspecialchars((string)($a['user_email'] ?? '-'), ENT_QUOTES, 'UTF-8') ?>
                         <?php if (!empty($a['user_role'])): ?>
                             <span class="text-muted">
                                 (<?= htmlspecialchars((string)$a['user_role'], ENT_QUOTES, 'UTF-8') ?>)
@@ -248,7 +248,7 @@ function statusBadge(string $status): string
                                 </button>
                             </form>
                         <?php else: ?>
-                            <button class="btn btn-sm btn-outline-secondary" disabled>—</button>
+                            <button class="btn btn-sm btn-outline-secondary" disabled>-</button>
                         <?php endif; ?>
                     </td>
                 </tr>

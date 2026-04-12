@@ -51,7 +51,7 @@ $titleText = match ($mode) {
   <button class="btn btn-primary" type="submit">Login</button>
   <?php if ($mode === 'client'): ?>
     <div class="mt-3 small">
-      Don’t have an account? <a href="/register">Create one</a>
+      Don't have an account? <a href="/register">Create one</a>
     </div>
   <?php endif; ?>
 

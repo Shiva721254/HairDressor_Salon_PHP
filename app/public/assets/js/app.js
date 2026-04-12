@@ -1,197 +1,287 @@
+/* ============================================================
+ * Booking — Slot Loader
+ * Used on: /appointments/new
+ * ============================================================ */
 (() => {
-  const hairdresserEl = document.querySelector('select[name="hairdresser_id"]');
-  const serviceEl     = document.querySelector('select[name="service_id"]');
-  const dateEl        = document.querySelector('input[name="date"]');
-  const timeEl        = document.querySelector('select[name="time"]');
+  const hairdresserEl = document.getElementById('hairdresser_id');
+  const serviceEl     = document.getElementById('service_id');
+  const dateEl        = document.getElementById('appointment_date');
+  const timeEl        = document.getElementById('appointment_time');
+  const statusEl      = document.getElementById('slots-status');
+  const continueBtn   = document.getElementById('btn-continue');
 
   if (!hairdresserEl || !serviceEl || !dateEl || !timeEl) return;
 
-  function setDisabled(text) {
+  function clearTimeSelectAndShowDisabledMessage(message) {
     timeEl.innerHTML = '';
     const opt = document.createElement('option');
     opt.value = '';
-    opt.textContent = text;
+    opt.textContent = message;
     timeEl.appendChild(opt);
     timeEl.disabled = true;
+    if (continueBtn) continueBtn.disabled = true;
+    if (statusEl) statusEl.textContent = '';
   }
 
-  async function loadSlots() {
-    const hairdresserId = hairdresserEl.value;
-    const serviceId = serviceEl.value;
-    const date = dateEl.value;
+  function appendSingleTimeOptionToTimeSelect(time) {
+    const opt = document.createElement('option');
+    opt.value = time;
+    opt.textContent = time;
+    timeEl.appendChild(opt);
+  }
 
-    if (!hairdresserId || !serviceId || !date) {
-      setDisabled('-- Select hairdresser, service and date first --');
+  function populateTimeSelectWithAvailableSlots(slots) {
+    timeEl.innerHTML = '';
+    const ph = document.createElement('option');
+    ph.value = '';
+    ph.textContent = '-- Select time --';
+    timeEl.appendChild(ph);
+    slots.forEach(appendSingleTimeOptionToTimeSelect);
+    timeEl.disabled = false;
+    if (statusEl) statusEl.textContent = `Found ${slots.length} available time slots.`;
+  }
+
+  function applyApiSlotsToTimeSelectOrShowEmpty(slots) {
+    if (!Array.isArray(slots) || slots.length === 0) {
+      clearTimeSelectAndShowDisabledMessage('No available times for this date');
+      if (statusEl) statusEl.textContent = 'No available times found.';
       return;
     }
+    populateTimeSelectWithAvailableSlots(slots);
+  }
 
-    setDisabled('Loading available times...');
+  function getBookingFormValues() {
+    return {
+      hairdresserId: hairdresserEl.value,
+      serviceId: serviceEl.value,
+      date: dateEl.value,
+    };
+  }
 
+  function buildSlotsApiUrl(hairdresserId, serviceId, date) {
+    return `/api/slots?hairdresser_id=${encodeURIComponent(hairdresserId)}&service_id=${encodeURIComponent(serviceId)}&date=${encodeURIComponent(date)}`;
+  }
+
+  async function fetchSlotsFromApiAndFillTimeSelect(url) {
+    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!res.ok) {
+      clearTimeSelectAndShowDisabledMessage(`Error loading times (${res.status})`);
+      if (statusEl) statusEl.textContent = `Failed to load slots (${res.status}).`;
+      return;
+    }
+    const data = await res.json();
+    applyApiSlotsToTimeSelectOrShowEmpty((data && Array.isArray(data.slots)) ? data.slots : []);
+  }
+
+  async function fetchSlotsOrShowNetworkError(url) {
     try {
-      const response = await fetch(
-        `/api/slots?hairdresser_id=${encodeURIComponent(hairdresserId)}&service_id=${encodeURIComponent(serviceId)}&date=${encodeURIComponent(date)}`,
-        { headers: { 'Accept': 'application/json' } }
-      );
-
-      if (!response.ok) {
-        setDisabled('Failed to load times');
-        return;
-      }
-
-      const data = await response.json();
-
-      // API gives slots
-      const slots = data.slots;
-
-      timeEl.innerHTML = '';
-
-      if (!Array.isArray(slots) || slots.length === 0) {
-        setDisabled('No available times for this date');
-        return;
-      }
-
-      const placeholder = document.createElement('option');
-      placeholder.value = '';
-      placeholder.textContent = '-- Select time --';
-      timeEl.appendChild(placeholder);
-
-      for (const time of slots) {
-        const opt = document.createElement('option');
-        opt.value = time;
-        opt.textContent = time;
-        timeEl.appendChild(opt);
-      }
-
-      timeEl.disabled = false;
-
-    } catch (err) {
-      setDisabled('Network error loading times');
+      await fetchSlotsFromApiAndFillTimeSelect(url);
+    } catch {
+      clearTimeSelectAndShowDisabledMessage('Network error loading times');
+      if (statusEl) statusEl.textContent = 'Network error.';
     }
   }
 
-  hairdresserEl.addEventListener('change', loadSlots);
-  serviceEl.addEventListener('change', loadSlots);
-  dateEl.addEventListener('change', loadSlots);
+  async function fetchAndPopulateAvailableTimeSlots() {
+    const { hairdresserId, serviceId, date } = getBookingFormValues();
+    if (!hairdresserId || !serviceId || !date) {
+      clearTimeSelectAndShowDisabledMessage('-- Select hairdresser, service and date first --');
+      return;
+    }
+    clearTimeSelectAndShowDisabledMessage('Loading available times...');
+    if (statusEl) statusEl.textContent = 'Loading...';
+    await fetchSlotsOrShowNetworkError(buildSlotsApiUrl(hairdresserId, serviceId, date));
+  }
 
-  setDisabled('-- Select hairdresser, service and date first --');
+  function disableContinueButtonWhenNoTimeSelected() {
+    if (continueBtn) continueBtn.disabled = !timeEl.value;
+  }
+
+  hairdresserEl.addEventListener('change', fetchAndPopulateAvailableTimeSlots);
+  serviceEl.addEventListener('change', fetchAndPopulateAvailableTimeSlots);
+  dateEl.addEventListener('change', fetchAndPopulateAvailableTimeSlots);
+  timeEl.addEventListener('change', disableContinueButtonWhenNoTimeSelected);
+
+  clearTimeSelectAndShowDisabledMessage('-- Select hairdresser, service and date first --');
 })();
 
+/* ============================================================
+ * Time Range Picker — filter end times to be after start time
+ * Used on: /staff/availability (weekly_start/weekly_end, adj_start/adj_end)
+ * ============================================================ */
 (() => {
-  const startEl = document.querySelector('#weekly_start');
-  const endEl = document.querySelector('#weekly_end');
-
-  if (!startEl || !endEl) return;
-
-  const allEndOptions = Array.from(endEl.querySelectorAll('option'))
-    .map((opt) => ({ value: opt.value, label: opt.textContent || '' }))
-    .filter((opt) => opt.value !== '');
-
-  function toMinutes(hhmm) {
-    const parts = hhmm.split(':');
+  function convertHhmmStringToMinutes(hhmm) {
+    const parts = String(hhmm || '').split(':');
     if (parts.length !== 2) return -1;
     const h = Number(parts[0]);
     const m = Number(parts[1]);
     if (!Number.isInteger(h) || !Number.isInteger(m)) return -1;
-    return (h * 60) + m;
+    return h * 60 + m;
   }
 
-  function rebuildEndOptions() {
-    const selectedStart = startEl.value;
-    const selectedEnd = endEl.value || endEl.dataset.selected || '';
-    const startMins = toMinutes(selectedStart);
+  function createPlaceholderOptionForEndSelect(startValue) {
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = startValue ? '-- Select end time --' : '-- Select start time first --';
+    return opt;
+  }
 
+  function cloneSourceOptionAndMarkIfSelected(sourceOpt, selectedValue) {
+    const next = document.createElement('option');
+    next.value = sourceOpt.value;
+    next.textContent = sourceOpt.textContent;
+    if (sourceOpt.value === selectedValue) next.selected = true;
+    return next;
+  }
+
+  function appendEndTimeOptionsLaterThanStartMinutes(endEl, allOptions, startMins, selected) {
+    let count = 0;
+    for (const opt of allOptions) {
+      if (!opt.value || convertHhmmStringToMinutes(opt.value) <= startMins) continue;
+      endEl.appendChild(cloneSourceOptionAndMarkIfSelected(opt, selected));
+      count++;
+    }
+    return count;
+  }
+
+  function clearEndSelectAndInsertPlaceholder(startEl, endEl) {
     endEl.innerHTML = '';
-
-    const placeholder = document.createElement('option');
-    placeholder.value = '';
-    placeholder.textContent = selectedStart
-      ? '-- Select end time --'
-      : '-- Select start time first --';
+    const placeholder = createPlaceholderOptionForEndSelect(startEl.value);
     endEl.appendChild(placeholder);
-
-    if (!selectedStart || startMins < 0) {
-      endEl.disabled = true;
-      return;
-    }
-
-    const allowed = allEndOptions.filter((opt) => toMinutes(opt.value) > startMins);
-    for (const opt of allowed) {
-      const el = document.createElement('option');
-      el.value = opt.value;
-      el.textContent = opt.label;
-      if (opt.value === selectedEnd) {
-        el.selected = true;
-      }
-      endEl.appendChild(el);
-    }
-
-    endEl.disabled = (allowed.length === 0);
-    if (allowed.length === 0) {
-      placeholder.textContent = '-- No end times available --';
-    }
+    return placeholder;
   }
 
-  startEl.addEventListener('change', () => {
-    endEl.dataset.selected = '';
-    rebuildEndOptions();
-  });
+  function rebuildValidEndTimeOptionsFromStartValue(startEl, endEl, allOptions) {
+    const start     = startEl.value;
+    const selected  = endEl.value || endEl.dataset.selected || '';
+    const startMins = convertHhmmStringToMinutes(start);
+    const placeholder = clearEndSelectAndInsertPlaceholder(startEl, endEl);
+    if (!start || startMins < 0) { endEl.disabled = true; return; }
+    const count = appendEndTimeOptionsLaterThanStartMinutes(endEl, allOptions, startMins, selected);
+    endEl.disabled = (count === 0);
+    if (count === 0) placeholder.textContent = '-- No end times available --';
+  }
 
-  rebuildEndOptions();
+  function bindStartAndEndTimeSelectsToFilterEachOther(startId, endId) {
+    const startEl    = document.getElementById(startId);
+    const endEl      = document.getElementById(endId);
+    if (!startEl || !endEl) return;
+    const allOptions = Array.from(endEl.querySelectorAll('option'));
+    const rebuild    = () => rebuildValidEndTimeOptionsFromStartValue(startEl, endEl, allOptions);
+    startEl.addEventListener('change', () => { endEl.dataset.selected = ''; rebuild(); });
+    rebuild();
+  }
+
+  bindStartAndEndTimeSelectsToFilterEachOther('weekly_start', 'weekly_end');
+  bindStartAndEndTimeSelectsToFilterEachOther('adj_start', 'adj_end');
 })();
 
-/* Duration dropdown */
-
+/* ============================================================
+ * Duration Dropdown — custom dropdown for service duration
+ * Used on: /admin/services (create / edit)
+ * ============================================================ */
 (() => {
-  const durationBtn = document.getElementById('durationBtn');
-  const durationMenu = document.getElementById('durationMenu');
+  const durationBtn   = document.getElementById('durationBtn');
+  const durationMenu  = document.getElementById('durationMenu');
   const durationLabel = document.getElementById('durationLabel');
   const durationInput = document.getElementById('duration_minutes');
-  
+
   if (!durationBtn || !durationMenu || !durationInput) return;
 
-  // set label
-  function updateLabel() {
-    const items = durationMenu.querySelectorAll('.custom-dropdown-item[data-value]');
-    items.forEach(item => item.classList.remove('active'));
-    
-    const currentValue = durationInput.value;
-    if (currentValue) {
-      const activeItem = durationMenu.querySelector(`.custom-dropdown-item[data-value="${currentValue}"]`);
-      if (activeItem) {
-        durationLabel.textContent = activeItem.textContent;
-        activeItem.classList.add('active');
-      }
-    } else {
+  function removeActiveStateFromAllDurationMenuItems() {
+    durationMenu.querySelectorAll('.custom-dropdown-item[data-value]')
+      .forEach(item => item.classList.remove('active'));
+  }
+
+  function activateDurationMenuItemMatchingValueAndUpdateLabel(value) {
+    const item = durationMenu.querySelector(`.custom-dropdown-item[data-value="${value}"]`);
+    if (!item) return;
+    if (durationLabel) durationLabel.textContent = item.textContent;
+    item.classList.add('active');
+  }
+
+  function syncDurationLabelAndActiveItemWithCurrentInputValue() {
+    removeActiveStateFromAllDurationMenuItems();
+    if (durationInput.value) {
+      activateDurationMenuItemMatchingValueAndUpdateLabel(durationInput.value);
+    } else if (durationLabel) {
       durationLabel.textContent = 'Select duration...';
     }
   }
 
-  // open/close menu
-  durationBtn.addEventListener('click', (e) => {
+  function toggleDurationMenuOpenOrClosed(e) {
     e.preventDefault();
     durationBtn.classList.toggle('active');
     durationMenu.classList.toggle('show');
-  });
+  }
 
-  // pick item
-  durationMenu.querySelectorAll('.custom-dropdown-item[data-value]').forEach(item => {
-    item.addEventListener('click', () => {
-      const value = item.dataset.value;
-      durationInput.value = value;
-      durationBtn.classList.remove('active');
-      durationMenu.classList.remove('show');
-      updateLabel();
-    });
-  });
+  function selectClickedDurationItemAndCloseMenu(item) {
+    durationInput.value = item.dataset.value;
+    durationBtn.classList.remove('active');
+    durationMenu.classList.remove('show');
+    syncDurationLabelAndActiveItemWithCurrentInputValue();
+  }
 
-  // close if outside
-  document.addEventListener('click', (e) => {
+  function closeDurationMenuWhenUserClicksOutside(e) {
     if (!durationBtn.contains(e.target) && !durationMenu.contains(e.target)) {
       durationBtn.classList.remove('active');
       durationMenu.classList.remove('show');
     }
-  });
+  }
 
-  // first label set
-  updateLabel();
+  durationBtn.addEventListener('click', toggleDurationMenuOpenOrClosed);
+  durationMenu.querySelectorAll('.custom-dropdown-item[data-value]')
+    .forEach(item => item.addEventListener('click', () => selectClickedDurationItemAndCloseMenu(item)));
+  document.addEventListener('click', closeDurationMenuWhenUserClicksOutside);
+
+  syncDurationLabelAndActiveItemWithCurrentInputValue();
+})();
+
+/* ============================================================
+ * Hairdresser Availability — fetch and render working days
+ * Used on: /hairdressers/:id
+ * Reads hairdresser ID from data-hairdresser-id on #availability-container
+ * ============================================================ */
+(() => {
+  const container = document.getElementById('availability-container');
+  if (!container) return;
+
+  const hairdresserId = Number(container.dataset.hairdresserId);
+  if (!hairdresserId) return;
+
+  const DAY_NAMES = {
+    1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday',
+    5: 'Friday', 6: 'Saturday', 7: 'Sunday'
+  };
+
+  function buildTableRowForEachWorkingDay(workingDays) {
+    return workingDays.map(d => `<tr><td>${DAY_NAMES[d] ?? 'Unknown'}</td></tr>`).join('');
+  }
+
+  function buildWorkingDaysTableHtml(workingDays) {
+    return `<div class="table-responsive">
+      <table class="table table-striped table-bordered align-middle">
+        <thead><tr><th>Working Day</th></tr></thead>
+        <tbody>${buildTableRowForEachWorkingDay(workingDays)}</tbody>
+      </table>
+    </div>`;
+  }
+
+  function renderWorkingDaysTableOrNoAvailabilityNotice(data) {
+    const workingDays = data.working_days ?? [];
+    if (workingDays.length === 0) {
+      container.innerHTML = '<div class="alert alert-info">No availability set for this hairdresser.</div>';
+      return;
+    }
+    container.innerHTML = buildWorkingDaysTableHtml(workingDays);
+  }
+
+  function renderAvailabilityFetchFailedError() {
+    container.innerHTML = '<div class="alert alert-danger">Could not load availability.</div>';
+  }
+
+  fetch(`/api/hairdressers/${hairdresserId}/availability`, { headers: { 'Accept': 'application/json' } })
+    .then(res => { if (!res.ok) throw new Error('Failed'); return res.json(); })
+    .then(renderWorkingDaysTableOrNoAvailabilityNotice)
+    .catch(renderAvailabilityFetchFailedError);
 })();

@@ -90,7 +90,10 @@
     <p class="text-muted mb-3">You can request an export of your data or submit a deletion request.</p>
 
     <div class="d-flex flex-wrap gap-2">
-        <a class="btn btn-outline-primary" href="/profile/export">Download my data</a>
+        <form method="POST" action="/profile/export" class="d-inline">
+            <?= $this->csrfField() ?>
+            <button class="btn btn-outline-primary" type="submit">Download my data</button>
+        </form>
 
         <form method="POST" action="/profile/delete" class="d-inline" onsubmit="return confirm('Submit a deletion request?');">
             <?= $this->csrfField() ?>

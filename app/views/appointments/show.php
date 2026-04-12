@@ -49,13 +49,13 @@ $isBooked = ($status === 'booked');
             <?= htmlspecialchars((string)($appointment['service_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
             <span class="text-muted">
                 (<?= (int)($appointment['duration_minutes'] ?? 0) ?> min,
-                €<?= number_format((float)($appointment['price'] ?? 0), 2) ?>)
+                EUR <?= number_format((float)($appointment['price'] ?? 0), 2) ?>)
             </span>
         </td>
     </tr>
     <tr>
         <th>User</th>
-        <td><?= htmlspecialchars((string)($appointment['user_email'] ?? '—'), ENT_QUOTES, 'UTF-8') ?></td>
+        <td><?= htmlspecialchars((string)($appointment['user_email'] ?? '-'), ENT_QUOTES, 'UTF-8') ?></td>
     </tr>
     <tr>
         <th>Status</th>

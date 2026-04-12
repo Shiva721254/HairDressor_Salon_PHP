@@ -68,9 +68,9 @@ declare(strict_types=1);
             id="password"
             name="password"
             required
-            minlength="6"
+            minlength="8"
             autocomplete="new-password">
-        <div class="form-text">Use at least 6 characters.</div>
+        <div class="form-text">Use at least 8 characters.</div>
     </div>
 
     <!-- Confirm Password -->
@@ -82,7 +82,7 @@ declare(strict_types=1);
             id="password_confirm"
             name="password_confirm"
             required
-            minlength="6"
+            minlength="8"
             autocomplete="new-password">
     </div>
 

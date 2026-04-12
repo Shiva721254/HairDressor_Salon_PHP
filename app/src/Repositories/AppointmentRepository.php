@@ -329,7 +329,12 @@ final class AppointmentRepository implements AppointmentRepositoryInterface
      *
      * @return array<int, string> Example: ["10:00","10:30","11:00"]
      */
-    public function getAvailableSlots(int $hairdresserId, int $serviceId, string $dateYmd): array
+    public function getAvailableSlots(
+        int $hairdresserId,
+        int $serviceId,
+        string $dateYmd,
+        ?int $excludeAppointmentId = null
+    ): array
     {
         $duration = $this->fetchServiceDuration($serviceId);
 
@@ -354,12 +359,14 @@ final class AppointmentRepository implements AppointmentRepositoryInterface
             return [];
         }
 
-        $bookings = $this->bookingsForDate($hairdresserId, $dateYmd);
+        $bookings = $this->bookingsForDate($hairdresserId, $dateYmd, $excludeAppointmentId);
 
         $blockedWindows = $this->blockedWindowsForDate($hairdresserId, $dateYmd);
 
-        $stepMinutes = 30;
+        $stepMinutes = 15;
         $slots = [];
+        $now = new \DateTimeImmutable('now');
+        $todayYmd = $now->format('Y-m-d');
 
         foreach ($windows as $w) {
             $start = new \DateTimeImmutable($dateYmd . ' ' . $w['start_time']);
@@ -385,6 +392,10 @@ final class AppointmentRepository implements AppointmentRepositoryInterface
 
                 if ($slotEnd > $end) {
                     break;
+                }
+
+                if ($dateYmd === $todayYmd && $slotStart <= $now) {
+                    continue;
                 }
 
                 $conflict = false;

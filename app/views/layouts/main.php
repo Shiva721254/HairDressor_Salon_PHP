@@ -153,7 +153,7 @@ $adminActive = isPathActive($currentPath, ['/admin']);
 
 <footer class="border-top py-3">
     <div class="container small text-muted">
-        <?= htmlspecialchars('© ' . date('Y') . ' Salon App', ENT_QUOTES, 'UTF-8') ?>
+        <?= htmlspecialchars('(c) ' . date('Y') . ' Salon App', ENT_QUOTES, 'UTF-8') ?>
     </div>
 </footer>
 

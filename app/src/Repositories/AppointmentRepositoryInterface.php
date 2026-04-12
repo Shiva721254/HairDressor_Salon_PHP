@@ -42,5 +42,10 @@ interface AppointmentRepositoryInterface
 
     public function deleteById(int $id): bool;
 
-    public function getAvailableSlots(int $hairdresserId, int $serviceId, string $dateYmd): array;
+    public function getAvailableSlots(
+        int $hairdresserId,
+        int $serviceId,
+        string $dateYmd,
+        ?int $excludeAppointmentId = null
+    ): array;
 }

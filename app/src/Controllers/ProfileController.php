@@ -131,6 +131,7 @@ final class ProfileController extends Controller
     public function export(): string
     {
         $user = $this->requireLogin();
+        $this->requireCsrf();
 
         $userId = (int)($user['id'] ?? 0);
 

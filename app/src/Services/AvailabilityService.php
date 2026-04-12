@@ -12,8 +12,13 @@ final class AvailabilityService
     }
 
     /** @return array<int, string> */
-    public function availableSlots(int $hairdresserId, int $serviceId, string $dateYmd): array
+    public function availableSlots(
+        int $hairdresserId,
+        int $serviceId,
+        string $dateYmd,
+        ?int $excludeAppointmentId = null
+    ): array
     {
-        return $this->appointments->getAvailableSlots($hairdresserId, $serviceId, $dateYmd);
+        return $this->appointments->getAvailableSlots($hairdresserId, $serviceId, $dateYmd, $excludeAppointmentId);
     }
 }

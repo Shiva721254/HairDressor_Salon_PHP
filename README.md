@@ -4,6 +4,7 @@ Hairdresser Salon Appointment System
 1. From project root, run: docker-compose up
 2. Open http://localhost
 3. Optional DB UI: http://localhost:8080 (phpMyAdmin)
+4. SQL deliverable: `database_export.sql` is saved as UTF-8 and can be imported directly in MySQL/MariaDB tools.
 
 Demo login credentials
 - Admin: admin@salon.test / Admin123!
@@ -17,6 +18,36 @@ Code patterns / framework enhancements
 - Base controller utilities (render, json, csrf, auth guards): app/src/Core/Controller.php
 - Repository pattern with interfaces: app/src/Repositories/
 - Service layer for booking and availability logic: app/src/Services/BookingService.php, app/src/Services/AvailabilityService.php
+
+Rubric mapping
+- CSS framework and responsive UI:
+  - Bootstrap is loaded in the main layout: app/views/layouts/main.php
+  - Custom responsive styling and transitions: app/public/assets/css/app.css
+- Sessions:
+  - Session startup and auth/session state: app/public/index.php
+  - Session-backed login state and CSRF token handling: app/src/Core/Controller.php, app/views/layouts/main.php
+- Security:
+  - Parameterized PDO queries: app/src/Repositories/UserRepository.php, app/src/Repositories/AppointmentRepository.php, app/src/Repositories/AvailabilityRepository.php
+  - Password hashing and verification: app/src/Controllers/AuthController.php, app/src/Controllers/ProfileController.php, app/src/Controllers/Admin/StaffAdminController.php
+  - Server-side input validation: app/src/Controllers/AuthController.php, app/src/Controllers/ProfileController.php, app/src/Controllers/Admin/StaffAdminController.php, app/src/Controllers/AppointmentController.php
+  - Route protection by authentication/authorization: app/src/Core/Controller.php, app/public/index.php
+- MVC / architecture:
+  - Front controller and routing: app/public/index.php
+  - Controllers: app/src/Controllers/
+  - Views/templates: app/views/
+  - Repositories and interfaces: app/src/Repositories/
+  - Services: app/src/Services/
+  - Dependency inversion/container wiring: app/src/Core/Container.php
+- API and JavaScript:
+  - JSON response helper: app/src/Core/Controller.php
+  - Booking slots API: app/src/Controllers/AppointmentController.php
+  - Hairdresser availability API: app/src/Controllers/HairdresserController.php
+  - JavaScript fetch + partial page updates: app/public/assets/js/app.js, app/views/appointments/create.php, app/views/hairdressers/show.php
+- Legal / accessibility:
+  - GDPR export and deletion request flow: app/src/Controllers/ProfileController.php, app/src/Controllers/Admin/GdprAdminController.php, app/src/Repositories/GdprRequestRepository.php
+  - GDPR schema support: app/database/migrations/001_initial_schema.sql
+  - Skip link, semantic main content, accessible navigation: app/views/layouts/main.php
+  - Accessible labels and form structure examples: app/views/auth/login.php, app/views/auth/register.php, app/views/appointments/create.php, app/views/staff/availability.php
 
 Security and compliance notes
 - CSRF protection:

@@ -39,26 +39,26 @@ $isLoggedIn = is_array($user);
 
                     <ul class="list-unstyled mb-0">
                         <li class="d-flex gap-2 mb-2">
-                            <span class="text-success">✓</span>
+                            <span class="text-success" aria-hidden="true">+</span>
                             <span>Pick a hairdresser and time slot</span>
                         </li>
                         <li class="d-flex gap-2 mb-2">
-                            <span class="text-success">✓</span>
+                            <span class="text-success" aria-hidden="true">+</span>
                             <span>Availability checks prevent double bookings</span>
                         </li>
                         <li class="d-flex gap-2 mb-2">
-                            <span class="text-success">✓</span>
+                            <span class="text-success" aria-hidden="true">+</span>
                             <span>Manage upcoming and past appointments</span>
                         </li>
                         <li class="d-flex gap-2">
-                            <span class="text-success">✓</span>
+                            <span class="text-success" aria-hidden="true">+</span>
                             <span>Admin can manage services, hairdressers and availability</span>
                         </li>
                     </ul>
 
                     <hr class="my-4">
 
-                    <h3 class="h6 mb-3 fw-semibold">📅 Opening Times</h3>
+                    <h3 class="h6 mb-3 fw-semibold">Opening Times</h3>
                     <div class="table-responsive">
                         <table class="table table-sm align-middle mb-0 opening-times-table">
                             <tbody>
@@ -70,7 +70,7 @@ $isLoggedIn = is_array($user);
                                     <td class="d-flex justify-content-between align-items-center gap-2">
                                         <span class="fw-500"><?= htmlspecialchars($hours, ENT_QUOTES, 'UTF-8') ?></span>
                                         <span class="badge <?= $isClosed ? 'bg-danger' : 'bg-success' ?>" style="font-size: 0.75rem;">
-                                            <?= $isClosed ? '🔴 Closed' : '🟢 Open' ?>
+                                            <?= $isClosed ? 'Closed' : 'Open' ?>
                                         </span>
                                     </td>
                                 </tr>
@@ -79,12 +79,6 @@ $isLoggedIn = is_array($user);
                         </table>
                     </div>
 
-                    <hr class="my-4">
-
-                    <div class="d-flex justify-content-between small text-muted">
-                        <span>Status</span>
-                        <span class="badge text-bg-success">Running</span>
-                    </div>
                 </div>
             </div>
         </div>

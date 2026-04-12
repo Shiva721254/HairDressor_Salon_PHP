@@ -35,6 +35,23 @@ final class AppointmentController extends Controller
         return $user;
     }
 
+    private function isValidSelectableSlot(
+        int $hairdresserId,
+        int $serviceId,
+        string $dateYmd,
+        string $timeHi,
+        ?int $excludeAppointmentId = null
+    ): bool {
+        $slots = $this->availabilityService->availableSlots(
+            $hairdresserId,
+            $serviceId,
+            $dateYmd,
+            $excludeAppointmentId
+        );
+
+        return in_array($timeHi, $slots, true);
+    }
+
     public function index(): string
     {
         $user = $this->requireLogin();
@@ -156,7 +173,11 @@ final class AppointmentController extends Controller
         if ($serviceId <= 0) $errors[] = 'Select a service.';
 
         $dt = \DateTimeImmutable::createFromFormat('Y-m-d', $dateYmd);
-        if ($dt === false || $dt->format('Y-m-d') !== $dateYmd) $errors[] = 'Invalid appointment date.';
+        if ($dt === false || $dt->format('Y-m-d') !== $dateYmd) {
+            $errors[] = 'Invalid appointment date.';
+        } elseif ($dt < new \DateTimeImmutable('today')) {
+            $errors[] = 'Appointment date cannot be in the past.';
+        }
 
         $tm = \DateTimeImmutable::createFromFormat('H:i', $timeHi);
         if ($tm === false || $tm->format('H:i') !== $timeHi) $errors[] = 'Invalid appointment time.';
@@ -176,6 +197,12 @@ final class AppointmentController extends Controller
 
         if ($hairdresser === null) $errors[] = 'Selected hairdresser not found.';
         if ($service === null) $errors[] = 'Selected service not found.';
+        if (
+            !$errors &&
+            !$this->isValidSelectableSlot($hairdresserId, $serviceId, $dateYmd, $timeHi)
+        ) {
+            $errors[] = 'Selected time is not available. Please choose a valid slot.';
+        }
 
         if ($errors) {
             http_response_code(422);
@@ -211,6 +238,24 @@ final class AppointmentController extends Controller
         if ($hairdresserId <= 0 || $serviceId <= 0 || $dateYmd === '' || $timeHi === '') {
             http_response_code(422);
             $this->flash('error', 'Missing booking information.');
+            return $this->redirect('/appointments/new');
+        }
+
+        $dt = \DateTimeImmutable::createFromFormat('Y-m-d', $dateYmd);
+        $tm = \DateTimeImmutable::createFromFormat('H:i', $timeHi);
+
+        if (
+            $dt === false || $dt->format('Y-m-d') !== $dateYmd ||
+            $tm === false || $tm->format('H:i') !== $timeHi
+        ) {
+            http_response_code(422);
+            $this->flash('error', 'Invalid booking date or time.');
+            return $this->redirect('/appointments/new');
+        }
+
+        if (!$this->isValidSelectableSlot($hairdresserId, $serviceId, $dateYmd, $timeHi)) {
+            http_response_code(409);
+            $this->flash('error', 'Selected time is no longer available. Please choose another slot.');
             return $this->redirect('/appointments/new');
         }
 
@@ -428,6 +473,14 @@ public function slots(): string
 
         $errors = $this->validateAdminAppointmentInput($userId, $hairdresserId, $serviceId, $dateYmd, $timeHi, $status);
 
+        if (
+            !$errors &&
+            $status !== 'cancelled' &&
+            !$this->isValidSelectableSlot($hairdresserId, $serviceId, $dateYmd, $timeHi)
+        ) {
+            $errors[] = 'Selected time is not inside the hairdresser availability for that service.';
+        }
+
         if (!$errors && $status !== 'cancelled' && $this->bookingService->overlapsExisting($hairdresserId, $serviceId, $dateYmd, $timeHi)) {
             $errors[] = 'Selected slot overlaps an existing appointment.';
         }
@@ -518,6 +571,14 @@ public function slots(): string
         $status = trim((string)($_POST['status'] ?? 'booked'));
 
         $errors = $this->validateAdminAppointmentInput($userId, $hairdresserId, $serviceId, $dateYmd, $timeHi, $status);
+
+        if (
+            !$errors &&
+            $status !== 'cancelled' &&
+            !$this->isValidSelectableSlot($hairdresserId, $serviceId, $dateYmd, $timeHi, $idInt)
+        ) {
+            $errors[] = 'Selected time is not inside the hairdresser availability for that service.';
+        }
 
         if (!$errors && $status !== 'cancelled' && $this->bookingService->overlapsExisting($hairdresserId, $serviceId, $dateYmd, $timeHi, $idInt)) {
             $errors[] = 'Selected slot overlaps an existing appointment.';
